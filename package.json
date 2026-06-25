@@ -1,0 +1,26 @@
+{
+  "name": "letterforge-app",
+  "version": "1.0.0",
+  "license": "ISC",
+  "private": true,
+  "description": "LetterForge - Monorepo for Backend API and Frontend Dashboard",
+  "workspaces": [
+    "packages/*",
+    "lib/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,dashboard -c blue,magenta \"npm:dev:server\" \"npm:dev:dashboard\"",
+    "dev:server": "npm run dev --workspace packages/server",
+    "dev:dashboard": "npm run dev --workspace packages/dashboard",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "swagger": "npm run swagger --workspace packages/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "prettier": "^3.8.3",
+    "typescript": "~5.9.3"
+  }
+}

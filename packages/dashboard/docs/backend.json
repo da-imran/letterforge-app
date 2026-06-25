@@ -1,0 +1,100 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a player in LetterForge.",
+      "type": "object",
+      "properties": {
+        "nickname": {
+          "type": "string",
+          "description": "Unique player nickname."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created."
+        }
+      },
+      "required": ["nickname", "createdAt"]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "Represents a single game session.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID of the player."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["normal_mode", "time_attack"],
+          "description": "The game mode."
+        },
+        "letters": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "The randomly generated letters."
+        },
+        "score": {
+          "type": "number",
+          "description": "Current accumulated score."
+        },
+        "isCompleted": {
+          "type": "boolean",
+          "description": "Whether the game has ended."
+        },
+        "submissions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "word": { "type": "string" },
+              "points": { "type": "number" }
+            }
+          }
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp in ms."
+        },
+        "expiresAt": {
+          "type": "number",
+          "description": "Expiration timestamp for time attack."
+        }
+      },
+      "required": ["userId", "mode", "letters", "score", "isCompleted"]
+    },
+    "Score": {
+      "title": "Score",
+      "description": "A record of a completed game score for the leaderboard.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "nickname": { "type": "string" },
+        "score": { "type": "number" },
+        "mode": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["userId", "nickname", "score", "mode", "timestamp"]
+    }
+  },
+  "auth": {
+    "providers": ["anonymous"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Player profiles."
+    },
+    "/games/{gameId}": {
+      "schema": "Game",
+      "description": "Active and completed game sessions."
+    },
+    "/scores/{scoreId}": {
+      "schema": "Score",
+      "description": "Leaderboard records."
+    }
+  }
+}

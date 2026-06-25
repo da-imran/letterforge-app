@@ -1,0 +1,50 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: letter-forge-server
+    environment:
+      NODE_ENV: dev
+      ROUTE_PREPEND: letter-forge
+      SERVICE_NAME: letter-forge
+      HOSTNAME: apidev
+      API_VERSION: ${API_VERSION:-1.0.0}
+      APP_VERSION: ${APP_VERSION:-1.0.0}
+      VERSION: ${VERSION:-v1}
+      MONGODB_DBNAME: ${MONGODB_DBNAME:-data}
+      MONGO_URI: mongodb://mongodb:27017/${MONGODB_DBNAME:-data}
+      PORT: 8888
+    ports:
+      - "8888:8888"
+    networks:
+      - letter-forge-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: on-failure
+    command: ["npm", "start"]
+
+  mongodb:
+    image: mongo:7
+    container_name: letter-forge-mongodb
+    restart: unless-stopped
+    volumes:
+      - db_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - letter-forge-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand({ ping: 1 })", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  letter-forge-network:
+    driver: bridge
+
+volumes:
+  db_data:

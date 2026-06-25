@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 260 23% 9%;
+    --foreground: 0 0% 100%;
+    --card: 260 23% 12%;
+    --card-foreground: 0 0% 100%;
+    --popover: 260 23% 12%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 265 65% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 100% 65%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 260 20% 20%;
+    --muted-foreground: 260 10% 70%;
+    --accent: 265 65% 55%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 260 20% 20%;
+    --input: 260 20% 20%;
+    --ring: 265 65% 55%;
+    --radius: 0.75rem;
+    --chart-1: 265 65% 55%;
+    --chart-2: 220 100% 65%;
+    --chart-3: 45 93% 47%;
+    --chart-4: 160 84% 39%;
+    --chart-5: 27 87% 67%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-image: radial-gradient(circle at 50% 50%, rgba(138, 64, 219, 0.05) 0%, transparent 100%);
+    background-attachment: fixed;
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-40px); opacity: 0; }
+}
+
+.animate-float-up {
+  animation: float-up 0.8s ease-out forwards;
+}
+
+.letter-tile-flip {
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
+.letter-tile-flip.flipped {
+  transform: rotateY(180deg);
+}
