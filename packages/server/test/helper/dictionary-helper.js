@@ -1,16 +1,21 @@
 const fs = require('fs');
 const path = require('path');
 
-const DICT_PATH = path.join(
+const DATA_DIR = path.join(
     __dirname,
-    '../../modules/dictionary/dictionary.txt'
+    '../../modules/dictionary/data'
 );
 
-const words = fs
-    .readFileSync(DICT_PATH, 'utf8')
-    .split('\n')
-    .map(w => w.trim().toLowerCase())
-    .filter(Boolean);
+const words = [
+    ...new Set(
+        fs
+            .readdirSync(DATA_DIR)
+            .filter(f => /^[a-z]\.json$/.test(f))
+            .flatMap(file => Object.keys(JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'))))
+            .map(w => w.trim().toLowerCase())
+            .filter(w => /^[a-z]+$/.test(w))
+    ),
+];
 
 function getRandomWord({ minLength = 1, maxLength = Infinity, exactLength } = {}) {
     const candidates = words.filter(w => {

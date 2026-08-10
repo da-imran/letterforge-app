@@ -1,29 +1,34 @@
 const express = require('express');
+const { authRequired, optionalAuth } = require('../../middleware/auth');
+const { MODES } = require('../../utilities/constant');
 
 module.exports = (scoreService) => {
     const router = express.Router();
 
-    // Create a new score
-    router.post('/', async (req, res, next) => {
+    // Create a new score (authenticated users are bound to their own account)
+    router.post('/', authRequired, async (req, res, next) => {
         // #swagger.tags = ['scores']
         // #swagger.summary = 'Create a new score'
         try {
             const { userId, gameId, mode, points } = req.body || {};
 
-            if (!userId || !gameId || !mode || points === undefined) {
-                return res.status(400).json({ error: 'userId, gameId, mode, and points are required' });
+            if (userId && userId !== req.userId) {
+                return res.status(403).json({ status: 403, message: 'You can only submit scores for your own account' });
+            }
+
+            if (!gameId || !mode || points === undefined) {
+                return res.status(400).json({ status: 400, message: 'userId, gameId, mode, and points are required' });
             }
 
             if (typeof points !== 'number' || points < 0) {
-                return res.status(400).json({ error: 'Points must be a non-negative number' });
+                return res.status(400).json({ status: 400, message: 'Points must be a non-negative number' });
             }
 
-            const validModes = ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'];
-            if (!validModes.includes(mode)) {
-                return res.status(400).json({ error: 'Invalid mode' });
+            if (!MODES.includes(mode)) {
+                return res.status(400).json({ status: 400, message: 'Invalid mode' });
             }
 
-            const score = await scoreService.createScore({ userId, gameId, mode, points });
+            const score = await scoreService.createScore({ userId: req.userId, gameId, mode, points });
             res.status(201).json(score);
         } catch (err) {
             next(err);
@@ -31,7 +36,7 @@ module.exports = (scoreService) => {
     });
 
     // Get scores by game ID
-    router.get('/game/:gameId', async (req, res, next) => {
+    router.get('/game/:gameId', optionalAuth, async (req, res, next) => {
         // #swagger.tags = ['scores']
         // #swagger.summary = 'Get scores by game ID'
         try {
@@ -65,18 +70,7 @@ module.exports = (scoreService) => {
             const { mode, period } = req.query;
 
             if (!mode || !period) {
-                return res.status(400).json({ error: 'mode and period query parameters are required' });
-            }
-
-            const validModes = ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'];
-            const validPeriods = ['daily', 'weekly', 'all_time'];
-
-            if (!validModes.includes(mode)) {
-                return res.status(400).json({ error: 'Invalid mode' });
-            }
-
-            if (!validPeriods.includes(period)) {
-                return res.status(400).json({ error: 'Invalid period' });
+                return res.status(400).json({ status: 400, message: 'mode and period query parameters are required' });
             }
 
             const result = await scoreService.getTotalScoreByUser(userId, mode, period);

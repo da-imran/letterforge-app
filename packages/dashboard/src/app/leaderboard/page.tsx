@@ -14,7 +14,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Loader2, ArrowUpRight } from 'lucide-react';
+import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Sun, Loader2, ArrowUpRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function LeaderboardPage() {
@@ -54,7 +54,7 @@ export default function LeaderboardPage() {
         </div>
 
         <Tabs defaultValue="normal_mode" onValueChange={(v) => setMode(v as GameMode)} className="w-full md:w-auto">
-          <TabsList className="bg-card grid grid-cols-2 md:grid-cols-4 w-full md:min-w-[400px]">
+          <TabsList className="bg-card grid grid-cols-3 md:grid-cols-5 w-full md:min-w-[480px]">
             <TabsTrigger value="normal_mode" className="gap-2 text-xs md:text-sm">
               <Gamepad2 className="w-4 h-4" />
               Normal
@@ -70,6 +70,10 @@ export default function LeaderboardPage() {
             <TabsTrigger value="chain_mode" className="gap-2 text-xs md:text-sm">
               <LinkIcon className="w-4 h-4" />
               Chain
+            </TabsTrigger>
+            <TabsTrigger value="daily_challenge" className="gap-2 text-xs md:text-sm">
+              <Sun className="w-4 h-4" />
+              Daily
             </TabsTrigger>
           </TabsList>
         </Tabs>

@@ -1,8 +1,9 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Game } from '@/types';
+import { Game, Duel } from '@/types';
 import { api } from '@/lib/api';
+import { subscribeToDuel } from '@/lib/realtime';
 import { useUser } from '@/context/UserContext';
 import { LetterTile } from './LetterTile';
 import { Timer } from './Timer';
@@ -19,16 +20,26 @@ import {
   Award,
   History,
   TrendingUp,
-  Loader2
+  Loader2,
+  Swords
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface GameBoardProps {
   initialGame: Game;
+  duelId?: string;
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
-  const { user } = useUser();
+const MODE_LABELS: Record<string, string> = {
+  normal_mode: 'Normal Mode',
+  time_attack: 'Time Attack',
+  survival_mode: 'Survival Mode',
+  chain_mode: 'Chain Mode',
+  daily_challenge: 'Daily Challenge',
+};
+
+export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => {
+  const { refreshUser, user } = useUser();
   const [game, setGame] = useState<Game>(initialGame);
   const [word, setWord] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,8 +47,24 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
   const [isRefillingBatch, setIsRefillingBatch] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<{ type: 'success' | 'duplicate' | 'error', points?: number, reason?: string } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [opponentScore, setOpponentScore] = useState<number | null>(null);
+  const [opponentName, setOpponentName] = useState<string>('Opponent');
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  const modeLabel = duelId ? 'Duel' : (MODE_LABELS[game.mode] ?? game.mode.replace('_', ' '));
+
+  // Live opponent updates while playing a duel.
+  useEffect(() => {
+    if (!duelId) return;
+    const unsubscribe = subscribeToDuel(duelId, (duel: Duel) => {
+      const me = user?._id ?? null;
+      const theirs = duel.challenger?.userId === me ? duel.opponent : duel.challenger;
+      setOpponentScore(theirs?.score ?? null);
+      setOpponentName(theirs?.nickname || 'Opponent');
+    });
+    return unsubscribe;
+  }, [duelId, user?._id]);
 
   // Scoped localStorage keys for this game
   const getScopedKey = (key: string) => `letterforge_${game._id}_${key}`;
@@ -103,82 +130,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
     }
   };
 
-  // Helper function to check milestones after game completion
-  const checkUserMilestones = async () => {
-    if (!user?._id) return;
-
-    try {
-      // Get user stats from leaderboard to check milestones
-      const stats = await getUserStats();
-
-      // Call backend to check and unlock milestones
-      await api.checkMilestones(user._id, stats);
-    } catch (error) {
-      console.error('Error checking milestones:', error);
-    }
-  };
-
-  // Get user stats from API
-  const getUserStats = async () => {
-    if (!user) {
-      return {
-        normalGames: 0,
-        timedGames: 0,
-        totalGames: 0,
-        normalPoints: 0,
-        timedPoints: 0,
-        totalPoints: 0,
-        totalWords: 0,
-        avgPointsPerWord: 0,
-        maxWordStreak: 0,
-      };
-    }
-
-    try {
-      const allData = await api.getAllLeaderboard();
-
-      if (allData && allData.normal_mode && allData.time_attack) {
-        const normalAllTime = allData.normal_mode.all_time || [];
-        const timeAttackAllTime = allData.time_attack.all_time || [];
-
-        const currentUserNormal = normalAllTime.find((entry: any) => entry.userId === user._id);
-        const currentUserTimed = timeAttackAllTime.find((entry: any) => entry.userId === user._id);
-
-        const normalGames = currentUserNormal?.gameCount || 0;
-        const timedGames = currentUserTimed?.gameCount || 0;
-        const normalPoints = currentUserNormal?.totalScore || 0;
-        const timedPoints = currentUserTimed?.totalScore || 0;
-
-        return {
-          normalGames,
-          timedGames,
-          totalGames: normalGames + timedGames,
-          normalPoints,
-          timedPoints,
-          totalPoints: normalPoints + timedPoints,
-          totalWords: (normalGames + timedGames) * 5, // Estimated
-          avgPointsPerWord: (normalGames + timedGames) > 0 ? (normalPoints + timedPoints) / ((normalGames + timedGames) * 5) : 0,
-          maxWordStreak: game.submissions.length, // Use current game words
-        };
-      }
-    } catch (err) {
-      console.error('Error getting user stats:', err);
-    }
-
-    // Return default stats if API fails
-    return {
-      normalGames: 0,
-      timedGames: 0,
-      totalGames: 0,
-      normalPoints: 0,
-      timedPoints: 0,
-      totalPoints: 0,
-      totalWords: game.submissions.length, // Use current game words
-      avgPointsPerWord: 0,
-      maxWordStreak: game.submissions.length,
-    };
-  };
-
   const handleLetterClick = (letter: string) => {
     setWord(prev => prev + letter);
     inputRef.current?.focus();
@@ -202,6 +153,49 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
       }
 
       const response = await api.submitWord(game._id, word.trim().toLowerCase());
+
+      // Daily challenge: each guess is one attempt; wrong guesses don't award
+      // points and the round advances. The response carries the current round
+      // so the UI can show attempts remaining.
+      if (game.mode === 'daily_challenge') {
+        const guessed = word.trim().toLowerCase();
+        if (response.valid) {
+          setLastFeedback({ type: 'success', points: response.points });
+          setGame(prev => ({
+            ...prev,
+            score: response.totalScore,
+            round: response.round ?? prev.round,
+            maxRounds: response.maxRounds ?? prev.maxRounds,
+            isCompleted: true,
+            usedWords: [...prev.usedWords, guessed],
+            submissions: [...prev.submissions, { word: guessed, points: response.points }],
+          }));
+          setShowConfetti(true);
+          await api.completeGame(game._id);
+          await api.submitToLeaderboard(game._id, 'daily');
+          await submitDuelIfNeeded();
+          refreshUser();
+          clearLocalBatch();
+          toast({ title: "Correct!", description: `+${response.points} points!` });
+        } else {
+          const isOver = response.isCompleted === true;
+          setGame(prev => ({
+            ...prev,
+            round: response.round ?? prev.round,
+            maxRounds: response.maxRounds ?? prev.maxRounds,
+            isCompleted: isOver || prev.isCompleted,
+            usedWords: [...prev.usedWords, guessed],
+            submissions: [...prev.submissions, { word: guessed, points: 0 }],
+          }));
+          setLastFeedback({ type: 'error', reason: isOver ? 'out_of_attempts' : 'incorrect' });
+          if (isOver) {
+            setShowConfetti(true);
+            toast({ title: "Out of Attempts", description: "The daily challenge is over." });
+          }
+        }
+        setWord('');
+        return;
+      }
 
       if (response.valid) {
         if (response.duplicate) {
@@ -260,8 +254,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
           // Mark game as completed first, then submit to leaderboard
           await api.completeGame(game._id);
           await api.submitToLeaderboard(game._id, 'daily');
-          // Check for any new milestones
-          checkUserMilestones();
+          // In a duel, record the final score for the matchup.
+          await submitDuelIfNeeded();
+          // Refresh user so freshly unlocked milestones appear
+          refreshUser();
           // Clear localStorage batch data on completion
           clearLocalBatch();
           toast({ title: "Game Over!", description: `Final Score: ${response.totalScore}` });
@@ -303,6 +299,15 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
     }
   };
 
+  const submitDuelIfNeeded = async () => {
+    if (!duelId) return;
+    try {
+      await api.submitDuelScore(duelId, game._id);
+    } catch (err: any) {
+      console.error('Error submitting duel score:', err.message);
+    }
+  };
+
   const handleComplete = async () => {
     if (game.isCompleted) return;
 
@@ -334,8 +339,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
         // Submit to daily leaderboard
         await api.submitToLeaderboard(game._id, 'daily');
 
-        // Check for any new milestones
-        checkUserMilestones();
+        // In a duel, record the final score for the matchup.
+        await submitDuelIfNeeded();
+
+        // Refresh user so freshly unlocked milestones appear
+        refreshUser();
 
         // Clear localStorage batch data on completion
         clearLocalBatch();
@@ -353,14 +361,22 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
       <Card className="lg:col-span-2 bg-card/40 backdrop-blur-md border-border/50 shadow-2xl overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between border-b border-border/20 py-4">
           <CardTitle className="flex items-center gap-2">
+            {duelId && <Swords className="w-5 h-5 text-purple-500" />}
             <Badge variant="outline" className="text-secondary uppercase">
-              {game.mode.replace('_', ' ')}
+              {modeLabel}
             </Badge>
+            {duelId && opponentName && (
+              <span className="text-sm text-muted-foreground font-semibold hidden sm:inline">
+                vs {opponentName}: <span className="text-amber-500 font-black tabular-nums">{opponentScore ?? '–'}</span>
+              </span>
+            )}
           </CardTitle>
           <div className="flex items-center gap-4">
             {game.maxRounds && (
               <div className="flex flex-col items-center">
-                <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Round</span>
+                <span className="text-xs text-muted-foreground font-bold uppercase tracking-wider">
+                  {game.mode === 'daily_challenge' ? 'Attempt' : 'Round'}
+                </span>
                 <span className="text-2xl font-black text-primary tabular-nums">{game.round}/{game.maxRounds}</span>
               </div>
             )}
@@ -396,16 +412,23 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
             <Timer expiresAt={game.expiresAt} onExpire={handleComplete} className="max-w-md" />
           )}
 
-          <div className="flex flex-wrap justify-center gap-4 sm:gap-6 py-6">
-            {getDisplayLetters().map((letter, idx) => (
-              <LetterTile
-                key={`${letter}-${idx}-${game.round ?? 0}`}
-                letter={letter}
-                onClick={() => !game.isCompleted && handleLetterClick(letter)}
-                className={game.isCompleted ? "opacity-50 grayscale pointer-events-none" : ""}
-              />
-            ))}
-          </div>
+          {game.mode === 'daily_challenge' ? (
+            <div className="w-full max-w-md text-center py-6">
+              <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-3">Message of the day</p>
+              <p className="text-2xl md:text-3xl font-black text-amber-500 leading-relaxed">{game.clue}</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 py-6">
+              {getDisplayLetters().map((letter, idx) => (
+                <LetterTile
+                  key={`${letter}-${idx}-${game.round ?? 0}`}
+                  letter={letter}
+                  onClick={() => !game.isCompleted && handleLetterClick(letter)}
+                  className={game.isCompleted ? "opacity-50 grayscale pointer-events-none" : ""}
+                />
+              ))}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4 relative">
             <div className="relative group">
@@ -413,7 +436,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
                 ref={inputRef}
                 value={word}
                 onChange={(e) => setWord(e.target.value.toLowerCase())}
-                placeholder={game.isCompleted ? "GAME OVER" : "Forge a word..."}
+                placeholder={game.isCompleted ? "GAME OVER" : (game.mode === 'daily_challenge' ? "Your answer..." : "Forge a word...")}
                 disabled={game.isCompleted || isSubmitting}
                 className={`text-center text-2xl font-bold h-14 bg-background/50 border-2 transition-all duration-300 uppercase tracking-widest ${
                   lastFeedback?.type === 'error' ? 'border-destructive animate-shake' :
@@ -459,15 +482,35 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
 
           {game.isCompleted && (
             <div className="text-center space-y-4 py-4">
-              <h2 className="text-3xl font-black text-primary">Forge Finished!</h2>
-              <div className="flex justify-center gap-4">
-                <Button asChild variant="secondary">
-                  <a href="/leaderboard">View Leaderboard</a>
-                </Button>
-                <Button asChild>
-                  <a href={`/play?mode=${game.mode}`}>Forge Again</a>
-                </Button>
-              </div>
+              <h2 className="text-3xl font-black text-primary">
+                {game.mode === 'daily_challenge' ? 'Challenge Submitted!' : 'Forge Finished!'}
+              </h2>
+
+              {game.mode === 'daily_challenge' ? (
+                <div className="space-y-2 max-w-md mx-auto">
+                  <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Your Score</p>
+                  <p className="text-5xl font-black text-amber-500 tabular-nums">{game.score}</p>
+                  <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                    <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-1">Today's Answer</p>
+                    <p className="text-3xl font-black text-amber-500 uppercase tracking-widest">{game.dailyAnswer || '—'}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-center gap-4">
+                  <Button asChild variant="secondary">
+                    <a href="/leaderboard">View Leaderboard</a>
+                  </Button>
+                  {duelId ? (
+                    <Button asChild>
+                      <a href="/duels">View Duel</a>
+                    </Button>
+                  ) : (
+                    <Button asChild>
+                      <a href={`/play?mode=${game.mode}`}>Forge Again</a>
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -475,9 +518,11 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
         <CardFooter className="bg-muted/10 p-4 border-t border-border/20 flex justify-between">
           <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
             <SparkleIcon className="w-4 h-4 text-primary" />
-            Letters: {game.letters.join(', ').toUpperCase()}
+            {game.mode === 'daily_challenge'
+              ? `Attempts: ${game.round} of ${game.maxRounds}`
+              : `Letters: ${game.letters.join(', ').toUpperCase()}`}
           </div>
-          {!game.isCompleted && (
+          {!game.isCompleted && game.mode !== 'daily_challenge' && (
             <Button
               variant="outline"
               size="sm"

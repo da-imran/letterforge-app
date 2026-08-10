@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { HOSTNAME, PORT } = require('../utilities/env');
 
 const doc = {
   swagger: '2.0',
@@ -8,13 +9,22 @@ const doc = {
     description: 'API Documentation for Letter Forge Engine',
     version: '1.0.0'
   },
-  host: 'localhost:8888',
+  host: `${HOSTNAME}:${PORT}`,
   basePath: '/letter-forge/v1',
-  schemes: ['http'],
+  schemes: ['http', 'https'],
   consumes: ['application/json'],
   produces: ['application/json'],
+  securityDefinitions: {
+    bearerAuth: {
+      type: 'apiKey',
+      name: 'Authorization',
+      in: 'header',
+      description: 'JWT bearer token (format: "Bearer <token>")'
+    }
+  },
   tags: [
     { name: 'meta', description: 'API metadata and health checks' },
+    { name: 'auth', description: 'Authentication endpoints' },
     { name: 'games', description: 'Game management endpoints' },
     { name: 'users', description: 'User management endpoints' },
     { name: 'scores', description: 'Score tracking endpoints' },
@@ -38,6 +48,70 @@ const doc = {
         responses: { '200': { description: 'OK' } }
       }
     },
+    '/auth/register': {
+      post: {
+        tags: ['auth'],
+        summary: 'Register a new account',
+        description: 'Creates an account and returns a JWT token',
+        parameters: [
+          {
+            name: 'body',
+            in: 'body',
+            schema: {
+              type: 'object',
+              properties: {
+                email: { type: 'string' },
+                nickname: { type: 'string' },
+                password: { type: 'string', minLength: 8 }
+              },
+              required: ['email', 'password']
+            }
+          }
+        ],
+        responses: {
+          '201': { description: 'Created' },
+          '400': { description: 'Bad Request' },
+          '409': { description: 'Email already exists' }
+        }
+      }
+    },
+    '/auth/login': {
+      post: {
+        tags: ['auth'],
+        summary: 'Log in and receive a token',
+        description: 'Authenticates an account and returns a JWT token',
+        parameters: [
+          {
+            name: 'body',
+            in: 'body',
+            schema: {
+              type: 'object',
+              properties: {
+                email: { type: 'string' },
+                password: { type: 'string' }
+              },
+              required: ['email', 'password']
+            }
+          }
+        ],
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Invalid email or password' }
+        }
+      }
+    },
+    '/auth/me': {
+      get: {
+        tags: ['auth'],
+        summary: 'Get the authenticated user',
+        description: 'Returns the currently authenticated user',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'OK' },
+          '401': { description: 'Authentication required' }
+        }
+      }
+    },
     '/games': {
       post: {
         tags: ['games'],
@@ -51,7 +125,7 @@ const doc = {
               type: 'object',
               properties: {
                 mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'], description: 'Game mode' },
-                letterCount: { type: 'integer', description: 'Number of letters (3 or 4)' },
+                letterCount: { type: 'integer', description: 'Number of letters (2 to 5)' },
                 letters: { type: 'array', items: { type: 'string' }, description: 'Predetermined letters (optional)' },
                 userId: { type: 'string', description: 'User ID (optional)' }
               },
@@ -69,6 +143,20 @@ const doc = {
         description: 'Loads an existing game by its ID',
         parameters: [{ name: 'gameId', in: 'path', required: true, type: 'string' }],
         responses: { '200': { description: 'OK' } }
+      },
+      delete: {
+        tags: ['games'],
+        summary: 'Delete a game',
+        description: 'Permanently deletes an in-progress game. Completed games cannot be deleted.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'gameId', in: 'path', required: true, type: 'string' }],
+        responses: {
+          '200': { description: 'Game deleted' },
+          '400': { description: 'Completed games cannot be deleted' },
+          '401': { description: 'Authentication required' },
+          '403': { description: 'Not the game owner' },
+          '404': { description: 'Game not found' }
+        }
       }
     },
     '/games/{gameId}/submit': {
@@ -146,6 +234,7 @@ const doc = {
         tags: ['games'],
         summary: 'Submit game score to leaderboard',
         description: 'Submits the final game score to the leaderboard',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'gameId', in: 'path', required: true, type: 'string' },
           {
@@ -169,9 +258,9 @@ const doc = {
     '/users': {
       get: {
         tags: ['users'],
-        summary: 'Get user by email',
-        description: 'Returns a user by their email',
-        parameters: [{ name: 'email', in: 'query', required: true, type: 'string' }],
+        summary: 'Get user by nickname',
+        description: 'Returns a user by their nickname',
+        parameters: [{ name: 'nickname', in: 'query', required: true, type: 'string' }],
         responses: { '200': { description: 'OK' }, '404': { description: 'User not found' } }
       },
       post: {
@@ -210,6 +299,7 @@ const doc = {
         tags: ['users'],
         summary: 'Update user',
         description: "Updates a user's information",
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'userId', in: 'path', required: true, type: 'string' },
           {
@@ -233,8 +323,18 @@ const doc = {
         tags: ['users'],
         summary: 'Delete user',
         description: 'Deletes a user by their ID',
+        security: [{ bearerAuth: [] }],
         parameters: [{ name: 'userId', in: 'path', required: true, type: 'string' }],
         responses: { '200': { description: 'OK' }, '404': { description: 'User not found' } }
+      }
+    },
+    '/users/{userId}/stats': {
+      get: {
+        tags: ['users'],
+        summary: 'Get aggregate stats for a user',
+        description: 'Returns per-mode total score and game count for completed games',
+        parameters: [{ name: 'userId', in: 'path', required: true, type: 'string' }],
+        responses: { '200': { description: 'OK' }, '400': { description: 'Invalid user ID' } }
       }
     },
     '/scores': {
@@ -242,6 +342,7 @@ const doc = {
         tags: ['scores'],
         summary: 'Create a new score',
         description: 'Creates a score entry for a game',
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             name: 'body',
@@ -311,6 +412,7 @@ const doc = {
         tags: ['leaderboard'],
         summary: 'Submit game score',
         description: "Submit or update a user's score in the leaderboard",
+        security: [{ bearerAuth: [] }],
         parameters: [
           {
             name: 'body',
@@ -337,6 +439,7 @@ const doc = {
         description: "Returns user's rank in a specific leaderboard",
         parameters: [
           { name: 'userId', in: 'path', required: true, type: 'string' },
+          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
           { name: 'period', in: 'query', required: true, type: 'string', enum: ['daily', 'weekly', 'all_time'] }
         ],
         responses: { '200': { description: 'OK' }, '404': { description: 'User not found in leaderboard' } }
@@ -389,22 +492,17 @@ const doc = {
       post: {
         tags: ['milestones'],
         summary: 'Check and unlock milestones',
-        description: 'Check user stats and unlock any achieved milestones',
+        description: 'Computes real stats from completed games and unlocks any achieved milestones',
+        security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'userId', in: 'path', required: true, type: 'string' },
           {
             name: 'body',
             in: 'body',
+            description: 'Ignored - stats are computed server-side',
             schema: {
               type: 'object',
-              properties: {
-                totalGames: { type: 'integer' },
-                normalGames: { type: 'integer' },
-                timedGames: { type: 'integer' },
-                totalPoints: { type: 'integer' },
-                maxWordStreak: { type: 'integer' },
-                avgPointsPerWord: { type: 'integer' }
-              }
+              properties: {}
             }
           }
         ],

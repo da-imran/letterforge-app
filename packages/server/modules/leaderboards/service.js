@@ -1,79 +1,95 @@
 const mongo = require('../../utilities/mongodb');
+const { HttpError } = require('../../utilities/http-error');
+const { MODES, PERIODS } = require('../../utilities/constant');
+
+// In-process read cache. Leaderboard aggregations are expensive and are
+// re-read by every client refresh; a short TTL absorbs read amplification.
+// Writes invalidate the cache immediately via `onCreated`. Replace with a
+// Redis-backed cache when running multiple API instances.
+const CACHE_TTL_MS = 30 * 1000;
 
 class LeaderboardService {
     constructor(client) {
         this.client = client;
-        this.collection = 'leaderboards';
+        this.collection = 'scores';
+        this.cache = new Map();
     }
 
     /**
-     * Submit or update a user's score in the leaderboard
-     * @param {Object} params
-     * @param {string} params.userId - User's ObjectId as string
-     * @param {string} params.mode - Game mode (normal_mode, time_attack)
-     * @param {string} params.period - Period (daily, weekly, all_time)
-     * @param {number} params.score - Score to add
-     * @returns {Object} Updated leaderboard entry
+     * Drop cached leaderboard rows (optionally scoped to a mode).
      */
-    async submitScore({ userId, mode, period, score }) {
+    invalidateCache(mode = null) {
+        for (const key of this.cache.keys()) {
+            if (!mode || key.startsWith(`${mode}:`)) {
+                this.cache.delete(key);
+            }
+        }
+    }
+
+    async _cached(key, fetchFn) {
+        const hit = this.cache.get(key);
+        if (hit && hit.expiresAt > Date.now()) {
+            return hit.value;
+        }
+        const value = await fetchFn();
+        this.cache.set(key, { value, expiresAt: Date.now() + CACHE_TTL_MS });
+        return value;
+    }
+
+    /**
+     * Submit or update a user's score in the leaderboard.
+     * The `scores` collection is the single source of truth; `period` only
+     * narrows the date window used by rankings. Idempotent per `gameId`.
+     */
+    async submitScore({ userId, mode, period, score, gameId }) {
+        if (!MODES.includes(mode)) throw new HttpError(400, 'Invalid mode');
+        if (!PERIODS.includes(period)) throw new HttpError(400, 'Invalid period');
+
         const userObjectId = mongo.getObjectId(userId);
-        const now = new Date();
+        if (!userObjectId) throw new HttpError(400, 'Invalid userId');
 
-        const existing = await mongo.findOne(
-            this.client,
-            this.collection,
-            { userId: userObjectId, mode, period }
-        );
+        const entry = {
+            userId: userObjectId,
+            mode,
+            points: score,
+            createdAt: new Date(),
+        };
 
-        if (existing) {
-            await mongo.findOneAndUpdateInc(
-                this.client,
-                this.collection,
-                { userId: userObjectId, mode, period },
-                { totalScore: score, gameCount: 1 },
-            );
+        if (gameId) {
+            const gameObjectId = mongo.getObjectId(gameId);
+            if (!gameObjectId) throw new HttpError(400, 'Invalid gameId');
+            entry.gameId = gameObjectId;
 
-            await mongo.findOneAndUpdate(
-                this.client,
-                this.collection,
-                { userId: userObjectId, mode, period },
-                { lastPlayedAt: now, updatedAt: now }
-            );
+            const existing = await mongo.findOne(this.client, this.collection, { gameId: gameObjectId });
+            if (existing) {
+                return existing;
+            }
+        }
 
-            const updated = await mongo.findOne(
-                this.client,
-                this.collection,
-                { userId: userObjectId, mode, period }
-            );
-
-            return updated;
-        } else {
-            const newEntry = {
-                userId: userObjectId,
-                mode,
-                period,
-                totalScore: score,
-                gameCount: 1,
-                lastPlayedAt: now,
-                createdAt: now,
-                updatedAt: now
-            };
-
-            const result = await mongo.insertOne(this.client, this.collection, newEntry);
-            return { ...newEntry, _id: result.insertedId };
+        try {
+            const result = await mongo.insertOne(this.client, this.collection, entry);
+            this.invalidateCache(mode);
+            return { ...entry, _id: result.insertedId };
+        } catch (err) {
+            // Concurrent submission for the same game: return the winning row.
+            if (err && err.code === 11000) {
+                const winner = await mongo.findOne(this.client, this.collection, { gameId: entry.gameId });
+                if (winner) return winner;
+            }
+            throw err;
         }
     }
 
     /**
-     * Get leaderboard rankings (aggregated from scores collection)
-     * @param {Object} params
-     * @param {string} params.mode - Game mode
-     * @param {string} params.period - Period (daily, weekly, all_time)
-     * @param {number} params.limit - Number of results (default 10)
-     * @param {number} params.offset - Pagination offset (default 0)
-     * @returns {Array} Leaderboard entries with user info
+     * Get leaderboard rankings (aggregated from scores collection), cached
+     * in-process for CACHE_TTL_MS.
      */
     async getLeaderboard({ mode, period, limit = 10, offset = 0 }) {
+        const cacheKey = `${mode}:${period}:${limit}:${offset}`;
+        return this._cached(cacheKey, () => this._getLeaderboard({ mode, period, limit, offset }));
+    }
+
+    async _getLeaderboard({ mode, period, limit = 10, offset = 0 }) {
         const { startDate, endDate } = this._getPeriodDateRange(period);
 
         const matchStage = {
@@ -86,9 +102,7 @@ class LeaderboardService {
         }
 
         const pipeline = [
-            {
-                $match: matchStage
-            },
+            { $match: matchStage },
             {
                 $group: {
                     _id: '$userId',
@@ -97,15 +111,9 @@ class LeaderboardService {
                     lastPlayedAt: { $max: '$createdAt' }
                 }
             },
-            {
-                $sort: { totalScore: -1 }
-            },
-            {
-                $skip: offset
-            },
-            {
-                $limit: limit
-            },
+            { $sort: { totalScore: -1 } },
+            { $skip: offset },
+            { $limit: limit },
             {
                 $lookup: {
                     from: 'users',
@@ -117,14 +125,14 @@ class LeaderboardService {
             {
                 $unwind: {
                     path: '$user',
-                    preserveNullAndEmptyArrays: true
+                    preserveNullAndEmptyArrays: false
                 }
             },
             {
                 $project: {
                     _id: 0,
                     userId: '$_id',
-                    nickname: { $ifNull: ['$user.nickname', 'Unknown'] },
+                    nickname: { $ifNull: ['$user.nickname', '$user.email', 'Unknown'] },
                     totalScore: 1,
                     gameCount: 1,
                     lastPlayedAt: 1
@@ -132,8 +140,7 @@ class LeaderboardService {
             }
         ];
 
-        const results = await mongo.aggregate(this.client, 'scores', pipeline);
-        return results;
+        return mongo.aggregate(this.client, this.collection, pipeline);
     }
 
     /**
@@ -142,17 +149,19 @@ class LeaderboardService {
      */
     _getPeriodDateRange(period) {
         const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
         switch (period) {
-            case 'daily':
+            case 'daily': {
+                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+                const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
                 return { startDate: startOfDay, endDate: endOfDay };
-            case 'weekly':
+            }
+            case 'weekly': {
                 const startOfWeek = new Date(now);
                 startOfWeek.setDate(now.getDate() - now.getDay());
                 startOfWeek.setHours(0, 0, 0, 0);
                 return { startDate: startOfWeek, endDate: null };
+            }
             case 'all_time':
             default:
                 return { startDate: new Date(0), endDate: null };
@@ -160,109 +169,48 @@ class LeaderboardService {
     }
 
     /**
-     * Get user's rank in a specific leaderboard
-     * @param {string} userId - User's ObjectId as string
-     * @param {string} mode - Game mode
-     * @param {string} period - Period
-     * @returns {Object|null} User's rank and score
+     * Get user's rank in a specific leaderboard (computed from scores)
      */
-    async getUserRank(userId, period) {
-        const userObjectId = mongo.getObjectId(userId);
-        const now = new Date();
+    async getUserRank(userId, mode, period) {
+        if (!MODES.includes(mode)) throw new HttpError(400, 'Invalid mode');
+        if (!PERIODS.includes(period)) throw new HttpError(400, 'Invalid period');
 
-        let startDate;
-        switch (period) {
-            case 'daily':
-                startDate = new Date(now.setHours(0, 0, 0, 0));
-                break;
-            case 'weekly':
-                startDate = new Date(now.setDate(now.getDate() - now.getDay()));
-                startDate.setHours(0, 0, 0, 0);
-                break;
-            case 'all_time':
-            default:
-                startDate = new Date(0);
-                break;
+        const objectId = mongo.getObjectId(userId);
+        if (!objectId) throw new HttpError(400, 'Invalid userId');
+
+        const { startDate, endDate } = this._getPeriodDateRange(period);
+        const match = { mode, createdAt: { $gte: startDate } };
+        if (endDate) {
+            match.createdAt.$lte = endDate;
         }
 
-        const userEntry = await mongo.findOne(
-            this.client,
-            this.collection,
-            { userId: userObjectId }
-        );
+        const userRows = await mongo.aggregate(this.client, this.collection, [
+            { $match: { ...match, userId: objectId } },
+            { $group: { _id: null, totalScore: { $sum: '$points' }, gameCount: { $sum: 1 } } }
+        ]);
 
-        if (!userEntry) {
+        if (userRows.length === 0) {
             return null;
         }
 
-        const higherRankCount = await mongo.aggregate(this.client, this.collection, [
-            {
-                $match: {
-                    mode: userEntry.mode,
-                    period: period,
-                    totalScore: { $gt: userEntry.totalScore }
-                }
-            },
-            {
-                $count: 'count'
-            }
+        const { totalScore, gameCount } = userRows[0];
+
+        const higher = await mongo.aggregate(this.client, this.collection, [
+            { $match: match },
+            { $group: { _id: '$userId', totalScore: { $sum: '$points' } } },
+            { $match: { totalScore: { $gt: totalScore } } },
+            { $count: 'count' }
         ]);
 
-        const rank = (higherRankCount.length > 0 ? higherRankCount[0].count : 0) + 1;
+        const rank = (higher.length > 0 ? higher[0].count : 0) + 1;
 
         return {
             rank,
-            totalScore: userEntry.totalScore,
-            gameCount: userEntry.gameCount,
-            mode: userEntry.mode,
+            totalScore,
+            gameCount,
+            mode,
             period
         };
-    }
-
-    /**
-     * Reset daily leaderboard scores (called by scheduler)
-     * @returns {Object} Delete result
-     */
-    async resetDaily() {
-        const result = await mongo.deleteMany(
-            this.client,
-            this.collection,
-            { period: 'daily' }
-        );
-        return result;
-    }
-
-    /**
-     * Reset weekly leaderboard scores (called by scheduler)
-     * @returns {Object} Delete result
-     */
-    async resetWeekly() {
-        const result = await mongo.deleteMany(
-            this.client,
-            this.collection,
-            { period: 'weekly' }
-        );
-        return result;
-    }
-
-    /**
-     * Get a specific leaderboard entry for a user
-     * @param {string} userId - User's ObjectId as string
-     * @param {string} mode - Game mode
-     * @param {string} period - Period
-     * @returns {Object|null}
-     */
-    async getUserEntry(userId, mode, period) {
-        const entry = await mongo.findOne(
-            this.client,
-            this.collection,
-            {
-                userId: mongo.getObjectId(userId),
-                mode,
-                period
-            }
-        );
-        return entry;
     }
 }
 

@@ -1,50 +1,90 @@
 const fs = require('fs');
 const path = require('path');
 
-let dictionary = null;
+const DATA_DIR = path.join(__dirname, 'data');
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz';
 
-function loadDictionary() {
-    const filePath = path.join(__dirname, 'dictionary.txt');
+// Per-letter caches: { a: Set, b: Set, ... }. A file is only read the first
+// time a word starting with that letter is looked up.
+const loaded = new Map(); // letter -> Set<string>
+let merged = null;        // lazily-built full dictionary (all letters)
 
+/**
+ * Load (once) the file for a single first letter, e.g. `b.json`.
+ * Each file is an object whose keys are words beginning with that letter:
+ *   { "BAD": { "MEANINGS": {...}, "ANTONYMS": [], "SYNONYMS": [...] }, ... }
+ */
+function loadLetter(letter) {
+    if (loaded.has(letter)) return loaded.get(letter);
+
+    const filePath = path.join(DATA_DIR, `${letter}.json`);
     if (!fs.existsSync(filePath)) {
-        throw new Error('File dictionary.txt not found');
+        throw new Error(`Dictionary data file not found: ${letter}.json`);
     }
 
-    const words = fs.readFileSync(filePath, 'utf8').split('\n');
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const words = new Set();
+    for (const raw of Object.keys(data)) {
+        const normalized = raw.trim().toLowerCase();
+        if (/^[a-z]+$/.test(normalized)) {
+            words.add(normalized);
+        }
+    }
 
-    dictionary = new Set(
-        words
-            .map(w => w.trim().toLowerCase())
-            .filter(Boolean)
-    );
-
-    console.log(`Loaded ${dictionary.size} words`);
+    loaded.set(letter, words);
+    return words;
 }
 
 /**
- * Check if a word exists in dictionary
+ * Validate the data directory exists. Files are read lazily per first letter
+ * on first lookup, so nothing is loaded eagerly at boot.
+ */
+function loadDictionary() {
+    if (!fs.existsSync(DATA_DIR)) {
+        throw new Error('Dictionary data directory not found');
+    }
+    return null;
+}
+
+/**
+ * Check if a word exists in dictionary. The first letter of the input picks
+ * the file to consult, e.g. "BAD" -> `b.json`.
  * @param {string} word
  * @returns {boolean}
  */
 function isValidDictionaryWord(word) {
-    if (!dictionary) {
-        throw new Error('Dictionary not loaded. Call loadDictionary() first.');
-    }
-
     if (typeof word !== 'string') {
         return false;
     }
 
     const normalized = word.trim().toLowerCase();
-    if (!normalized) {
+    if (!/^[a-z]+$/.test(normalized)) {
         return false;
     }
 
-    return dictionary.has(normalized);
+    const letter = normalized[0];
+    return loadLetter(letter).has(normalized);
+}
+
+/**
+ * Full dictionary across all letters (lazily loaded and cached). Needed by
+ * callers that scan the whole word list (chain-mode letter generation, the
+ * daily-challenge solvability check).
+ */
+function getDictionary() {
+    if (!merged) {
+        merged = new Set();
+        for (const letter of LETTERS) {
+            for (const word of loadLetter(letter)) {
+                merged.add(word);
+            }
+        }
+    }
+    return merged;
 }
 
 module.exports = {
     loadDictionary,
     isValidDictionaryWord,
-    getDictionary: () => dictionary,
+    getDictionary,
 };

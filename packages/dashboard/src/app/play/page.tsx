@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Game, GameMode } from '@/types';
 import { api } from '@/lib/api';
@@ -19,11 +19,12 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 
-export default function PlayPage() {
+function PlayPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user, isAuthenticated, isLoading: userLoading, refreshUser } = useUser();
   const [game, setGame] = useState<Game | null>(null);
+  const [duelId, setDuelId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNicknameDialog, setShowNicknameDialog] = useState(false);
@@ -32,6 +33,7 @@ export default function PlayPage() {
   const { toast } = useToast();
 
   const mode = (searchParams.get('mode') as GameMode) || 'normal_mode';
+  const duelIdParam = searchParams.get('duelId');
 
   useEffect(() => {
     if (userLoading) return;
@@ -49,9 +51,26 @@ export default function PlayPage() {
 
     const initGame = async () => {
       setIsLoading(true);
+      setError(null);
       try {
-        const newGame = await api.createGame({ mode, userId: user?._id });
-        setGame(newGame);
+        if (duelIdParam) {
+          const duel = await api.getDuel(duelIdParam);
+          let myGameId = duel.myGameId;
+          if (!myGameId) {
+            const entered = await api.enterDuel(duelIdParam);
+            myGameId = entered.myGameId;
+          }
+          if (!myGameId) {
+            setError('No game is available for this duel yet.');
+            return;
+          }
+          const duelGame = await api.loadGame(myGameId);
+          setDuelId(duelIdParam);
+          setGame(duelGame);
+        } else {
+          const newGame = await api.createGame({ mode });
+          setGame(newGame);
+        }
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -60,7 +79,7 @@ export default function PlayPage() {
     };
 
     initGame();
-  }, [userLoading, isAuthenticated, mode, user?._id, user?.nickname, router]);
+  }, [userLoading, isAuthenticated, mode, duelIdParam, user?._id, user?.nickname, router]);
 
   const handleSetNickname = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +98,22 @@ export default function PlayPage() {
         toast({ title: "Nickname Set!", description: `Welcome to the forge, ${trimmedNickname}!` });
 
         // Initialize game after setting nickname
-        const newGame = await api.createGame({ mode, userId: user!._id });
-        setGame(newGame);
+        if (duelIdParam) {
+          const duel = await api.getDuel(duelIdParam);
+          let myGameId = duel.myGameId;
+          if (!myGameId) {
+            const entered = await api.enterDuel(duelIdParam);
+            myGameId = entered.myGameId;
+          }
+          if (myGameId) {
+            const duelGame = await api.loadGame(myGameId);
+            setDuelId(duelIdParam);
+            setGame(duelGame);
+          }
+        } else {
+          const newGame = await api.createGame({ mode });
+          setGame(newGame);
+        }
         setIsLoading(false);
       }
     } catch (error: any) {
@@ -123,7 +156,7 @@ export default function PlayPage() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {game && <GameBoard initialGame={game} />}
+      {game && <GameBoard initialGame={game} duelId={duelId ?? undefined} />}
 
       {/* Nickname Dialog for first-time players */}
       <Dialog open={showNicknameDialog} onOpenChange={(open) => {
@@ -161,5 +194,13 @@ export default function PlayPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense fallback={null}>
+      <PlayPageContent />
+    </Suspense>
   );
 }

@@ -1,23 +1,7 @@
-const MODULES = {
-	GAMECONTROLLER: 'game-controller',
-	GAMESERVICE: 'game-service',
-	GAMEROUTES: 'game-routes',
-	GAMETYPES: 'game-types',
-	SCORINGSERVICE: 'scoring-service',
-	WORDVALIDATORSERVICE: 'word-validator-service',
-};
-
-const METHODS = {
-	GET: 'GET',
-	PATCH: 'PATCH',
-	POST: 'POST',
-	DELETE: 'DELETE',
-};
-
 const GAME_CONFIG = {
 	MIN_LETTERS: 2,
-	MAX_LETTERS: 3,
-	DEFAULT_TIME_LIMIT_SECONDS: 30,
+	MAX_LETTERS: 5,
+	DEFAULT_TIME_LIMIT_SECONDS: 60,
 	DEFAULT_ROUNDS: 10,
 };
 
@@ -54,6 +38,17 @@ const MODE_CONFIG = {
 		batchSize: 10,
 		useBatch: true,
 	},
+	daily_challenge: {
+		maxRounds: 5,
+		letterCount: 0,
+		lives: null,
+		expiresAt: null,
+		batchSize: 10,
+		useBatch: false,
+	},
 };
 
-module.exports = { METHODS, MODULES, GAME_CONFIG, MODE_CONFIG };
+const MODES = Object.keys(MODE_CONFIG);
+const PERIODS = ['daily', 'weekly', 'all_time'];
+
+module.exports = { GAME_CONFIG, MODE_CONFIG, MODES, PERIODS };

@@ -32,41 +32,12 @@ export default function ProfilePage() {
     try {
       if (showLoading) setIsLoading(true);
 
-      // Get all leaderboard data
-      const allData = await api.getAllLeaderboard();
+      const stats = await api.getUserStats(user._id);
 
-      if (allData && allData.normal_mode && allData.time_attack) {
-        const normalAllTime = allData.normal_mode.all_time || [];
-        const timeAttackAllTime = allData.time_attack.all_time || [];
-        const survivalAllTime = allData.survival_mode?.all_time || [];
-        const chainAllTime = allData.chain_mode?.all_time || [];
-
-        // Find current user's stats
-        const currentUserNormal = normalAllTime.find((entry: any) => entry.userId === user._id);
-        const currentUserTimed = timeAttackAllTime.find((entry: any) => entry.userId === user._id);
-        const currentUserSurvival = survivalAllTime.find((entry: any) => entry.userId === user._id);
-        const currentUserChain = chainAllTime.find((entry: any) => entry.userId === user._id);
-
-        setNormalStats({
-          totalScore: currentUserNormal?.totalScore || 0,
-          gameCount: currentUserNormal?.gameCount || 0
-        });
-
-        setTimedStats({
-          totalScore: currentUserTimed?.totalScore || 0,
-          gameCount: currentUserTimed?.gameCount || 0
-        });
-
-        setSurvivalStats({
-          totalScore: currentUserSurvival?.totalScore || 0,
-          gameCount: currentUserSurvival?.gameCount || 0
-        });
-
-        setChainStats({
-          totalScore: currentUserChain?.totalScore || 0,
-          gameCount: currentUserChain?.gameCount || 0
-        });
-      }
+      setNormalStats(stats.normal_mode || { totalScore: 0, gameCount: 0 });
+      setTimedStats(stats.time_attack || { totalScore: 0, gameCount: 0 });
+      setSurvivalStats(stats.survival_mode || { totalScore: 0, gameCount: 0 });
+      setChainStats(stats.chain_mode || { totalScore: 0, gameCount: 0 });
     } catch (err) {
       console.error(err);
     } finally {

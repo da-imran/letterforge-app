@@ -1,5 +1,42 @@
-export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode';
+export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode' | 'daily_challenge';
 export type Period = 'daily' | 'weekly' | 'all_time';
+
+export interface DailyChallenge {
+  date: string;
+  clue: string;
+  attempts: number;
+  seed: string;
+}
+
+export type DuelStatus = 'open' | 'active' | 'completed';
+export type DuelResult = 'challenger' | 'opponent' | 'draw' | null;
+
+export interface DuelParticipant {
+  userId: string | null;
+  nickname: string;
+  score: number | null;
+  submittedAt: string | null;
+  lastActiveAt: string | null;
+  disconnectedAt: string | null;
+  forfeited: boolean;
+}
+
+export interface Duel {
+  _id: string;
+  code: string;
+  letterCount: number;
+  letters: string[] | null;
+  mode: GameMode;
+  maxRounds: number;
+  status: DuelStatus;
+  result: DuelResult;
+  winnerId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  challenger: DuelParticipant;
+  opponent: DuelParticipant;
+  myGameId: string | null;
+}
 
 export interface User {
   _id: string;
@@ -26,6 +63,12 @@ export interface Game {
   isCompleted: boolean;
   round: number;
   maxRounds: number | null;
+  lives?: number;
+  maxLives?: number | null;
+  lastLetter?: string;
+  currentScore?: number;
+  clue?: string;
+  dailyAnswer?: string;
 }
 
 export interface SubmitWordResponse {
@@ -69,6 +112,23 @@ export interface UserRank {
   gameCount: number;
   mode: GameMode;
   period: Period;
+}
+
+export interface ModeStats {
+  totalScore: number;
+  gameCount: number;
+}
+
+export interface UserStats {
+  normal_mode: ModeStats;
+  time_attack: ModeStats;
+  survival_mode: ModeStats;
+  chain_mode: ModeStats;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
 }
 
 export interface UserTotalScore {

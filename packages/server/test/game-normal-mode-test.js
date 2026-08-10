@@ -96,4 +96,26 @@ describe('Normal Mode (10 rounds)', () => {
             expect(initialScore).to.be.above(0);
         }
     });
+
+    it(`[NORMAL-MODE / NM08] - Delete an in-progress game`, async () => {
+        const game = await gameService.createGame({ mode: 'normal_mode', letterCount: 2, letters: ['s', 'e'] });
+
+        const result = await gameService.deleteGame(game._id);
+        expect(result.message).to.equal('Game deleted');
+
+        const deleted = await gameService.loadGame(game._id).catch(err => err);
+        expect(deleted.status).to.equal(404);
+    });
+
+    it(`[NORMAL-MODE / NM09] - Completed games cannot be deleted`, async () => {
+        const game = await gameService.createGame({ mode: 'normal_mode', letterCount: 3, letters: ['s', 'e', 'a'] });
+
+        for (let i = 0; i < 10; i++) {
+            await gameService.resetLetters(game._id, 3, ['s', 'e', 'a']);
+            await gameService.submitWord(game._id, 'sea');
+        }
+
+        const result = await gameService.deleteGame(game._id).catch(err => err);
+        expect(result.status).to.equal(400);
+    });
 });

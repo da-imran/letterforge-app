@@ -1,5 +1,5 @@
 const mongo = require('../../utilities/mongodb');
-const { ObjectId } = require('mongodb');
+const { toPublicUser } = require('../../utilities/sanitize-user');
 
 class UserService {
     constructor(client) {
@@ -23,6 +23,8 @@ class UserService {
             email: email ? email.trim().toLowerCase() : null,
             nickname: nickname ? nickname.trim().toLowerCase() : null,
             milestones: [],
+            xp: 0,
+            powerUps: { hint: 0 },
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -44,7 +46,8 @@ class UserService {
         const user = await mongo.findOne(
             this.client,
             this.collection,
-            { _id: mongo.getObjectId(userId) }
+            { _id: mongo.getObjectId(userId) },
+            { passwordHash: 0 }
         );
         return user;
     }
@@ -60,7 +63,8 @@ class UserService {
         const user = await mongo.findOne(
             this.client,
             this.collection,
-            { nickname: nickname.trim().toLowerCase() }
+            { nickname: nickname.trim().toLowerCase() },
+            { passwordHash: 0 }
         );
         return user;
     }
@@ -76,7 +80,8 @@ class UserService {
         const user = await mongo.findOne(
             this.client,
             this.collection,
-            { email: email.trim().toLowerCase() }
+            { email: email.trim().toLowerCase() },
+            { passwordHash: 0 }
         );
         return user;
     }
@@ -105,7 +110,7 @@ class UserService {
         );
 
         if (result) {
-            return result;
+            return toPublicUser(result);
         }
 
         return this.getUserById(userId);
@@ -117,11 +122,21 @@ class UserService {
      * @returns {boolean}
      */
     async deleteUser(userId) {
+        const objectId = mongo.getObjectId(userId);
         const result = await mongo.deleteOne(
             this.client,
             this.collection,
-            { _id: mongo.getObjectId(userId) }
+            { _id: objectId }
         );
+
+        // Cascade: remove the user's scores so they no longer appear
+        // as 'Unknown' on the leaderboard.
+        await mongo.deleteMany(
+            this.client,
+            'scores',
+            { userId: objectId }
+        );
+
         return result.deletedCount > 0;
     }
 }

@@ -81,7 +81,6 @@ describe('Leaderboards (via Scores Collection)', () => {
     });
 
     after(async () => {
-        await mongodb.deleteMany(mongoClient, 'leaderboards');
         await mongodb.deleteMany(mongoClient, 'scores');
         await mongodb.deleteMany(mongoClient, 'users');
         await mongoClient.close();

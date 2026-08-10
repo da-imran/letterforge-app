@@ -1,27 +1,60 @@
 "use client"
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/context/UserContext';
 import { UserAuth } from '@/components/UserAuth';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { api } from '@/lib/api';
+import { DailyChallenge, UserStats } from '@/types';
 import {
-  Zap,
   Clock,
   Gamepad2,
   Trophy,
   Star,
   BookCheck,
   Shield,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Sun,
+  Swords,
+  ArrowRight,
+  Flame,
+  Target
 } from 'lucide-react';
 
 export default function Home() {
   const { isAuthenticated, user } = useUser();
+  const [dailyChallenge, setDailyChallenge] = useState<DailyChallenge | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+
+  useEffect(() => {
+    api.getDailyChallenge()
+      .then(setDailyChallenge)
+      .catch(() => setDailyChallenge(null));
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && user?._id) {
+      api.getUserStats(user._id)
+        .then(setStats)
+        .catch(() => setStats(null));
+    } else {
+      setStats(null);
+    }
+  }, [isAuthenticated, user?._id]);
 
   // Display name: use nickname if available, otherwise show email
   const displayName = user?.nickname || user?.email || 'Player';
+
+  const totalScore = stats
+    ? (stats.normal_mode?.totalScore ?? 0) + (stats.time_attack?.totalScore ?? 0) + (stats.survival_mode?.totalScore ?? 0) + (stats.chain_mode?.totalScore ?? 0)
+    : 0;
+  const totalGames = stats
+    ? (stats.normal_mode?.gameCount ?? 0) + (stats.time_attack?.gameCount ?? 0) + (stats.survival_mode?.gameCount ?? 0) + (stats.chain_mode?.gameCount ?? 0)
+    : 0;
+  const activeModes = stats
+    ? [stats.normal_mode, stats.time_attack, stats.survival_mode, stats.chain_mode].filter(s => s && s.gameCount > 0).length
+    : 0;
 
   return (
     <div className="flex flex-col items-center">
@@ -49,35 +82,116 @@ export default function Home() {
               <UserAuth />
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-8">
-              <div className="flex flex-wrap justify-center gap-6">
+            <div className="flex flex-col items-center gap-10 w-full">
+              {/* Player context strip */}
+              <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <StatPill
+                  icon={<Flame className="w-5 h-5 text-orange-400" />}
+                  label="Total Score"
+                  value={totalScore.toLocaleString()}
+                />
+                <StatPill
+                  icon={<Gamepad2 className="w-5 h-5 text-violet-400" />}
+                  label="Games Played"
+                  value={totalGames.toString()}
+                />
+                <StatPill
+                  icon={<Target className="w-5 h-5 text-emerald-400" />}
+                  label="Modes Conquered"
+                  value={`${activeModes}/4`}
+                />
+              </div>
+              <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl">
                 <ModeCard
                   title="Normal Mode"
                   desc="10x rounds. Forge your best words at your own pace."
                   mode="normal_mode"
-                  icon={<Gamepad2 className="w-8 h-8 text-secondary" />}
-                  color="border-secondary/20 hover:border-secondary/50"
+                  icon={<Gamepad2 className="w-7 h-7" />}
+                  accent={{
+                    text: "text-violet-400",
+                    bg: "bg-violet-500/10",
+                    border: "border-violet-500/25",
+                    hoverBorder: "hover:border-violet-400/60",
+                    shadow: "hover:shadow-violet-500/20",
+                    glow: "from-violet-500/20",
+                    tag: "bg-violet-500 text-white"
+                  }}
                 />
                 <ModeCard
                   title="Time Attack"
                   desc="60 seconds. For those who forge under pressure."
                   mode="time_attack"
-                  icon={<Clock className="w-8 h-8 text-primary" />}
-                  color="border-primary/20 hover:border-primary/50"
+                  icon={<Clock className="w-7 h-7" />}
+                  accent={{
+                    text: "text-orange-400",
+                    bg: "bg-orange-500/10",
+                    border: "border-orange-500/25",
+                    hoverBorder: "hover:border-orange-400/60",
+                    shadow: "hover:shadow-orange-500/20",
+                    glow: "from-orange-500/20",
+                    tag: "bg-orange-500 text-white"
+                  }}
                 />
                 <ModeCard
                   title="Survival Mode"
                   desc="Endless rounds. Keep forging until you can't find words."
                   mode="survival_mode"
-                  icon={<Shield className="w-8 h-8 text-blue-500" />}
-                  color="border-blue-500/20 hover:border-blue-500/50"
+                  icon={<Shield className="w-7 h-7" />}
+                  accent={{
+                    text: "text-sky-400",
+                    bg: "bg-sky-500/10",
+                    border: "border-sky-500/25",
+                    hoverBorder: "hover:border-sky-400/60",
+                    shadow: "hover:shadow-sky-500/20",
+                    glow: "from-sky-500/20",
+                    tag: "bg-sky-500 text-white"
+                  }}
                 />
                 <ModeCard
                   title="Chain Mode"
                   desc="Link letters together. Each word starts with your last letter."
                   mode="chain_mode"
-                  icon={<LinkIcon className="w-8 h-8 text-green-500" />}
-                  color="border-green-500/20 hover:border-green-500/50"
+                  icon={<LinkIcon className="w-7 h-7" />}
+                  accent={{
+                    text: "text-emerald-400",
+                    bg: "bg-emerald-500/10",
+                    border: "border-emerald-500/25",
+                    hoverBorder: "hover:border-emerald-400/60",
+                    shadow: "hover:shadow-emerald-500/20",
+                    glow: "from-emerald-500/20",
+                    tag: "bg-emerald-500 text-white"
+                  }}
+                />
+                <ModeCard
+                  title="Daily Challenge"
+                  desc="One shared puzzle a day. Solve message of the day to score."
+                  mode="daily_challenge"
+                  icon={<Sun className="w-7 h-7" />}
+                  accent={{
+                    text: "text-amber-400",
+                    bg: "bg-amber-500/10",
+                    border: "border-amber-500/25",
+                    hoverBorder: "hover:border-amber-400/60",
+                    shadow: "hover:shadow-amber-500/20",
+                    glow: "from-amber-500/20",
+                    tag: "bg-amber-500 text-black"
+                  }}
+                />
+                <ModeCard
+                  title="Duels"
+                  desc="1v1. Challenge a friend and compare your scores."
+                  mode="duel"
+                  icon={<Swords className="w-7 h-7" />}
+                  accent={{
+                    text: "text-fuchsia-400",
+                    bg: "bg-fuchsia-500/10",
+                    border: "border-fuchsia-500/25",
+                    hoverBorder: "hover:border-fuchsia-400/60",
+                    shadow: "hover:shadow-fuchsia-500/20",
+                    glow: "from-fuchsia-500/20",
+                    tag: "bg-fuchsia-500 text-white"
+                  }}
+                  href="/duels"
                 />
               </div>
               <p className="text-muted-foreground italic">Welcome back, <span className="text-foreground font-bold">{displayName}</span>!</p>
@@ -116,19 +230,53 @@ export default function Home() {
   );
 }
 
-function ModeCard({ title, desc, mode, icon, color }: { title: string, desc: string, mode: string, icon: React.ReactNode, color: string }) {
+interface ModeAccent {
+  text: string;
+  bg: string;
+  border: string;
+  hoverBorder: string;
+  shadow: string;
+  glow: string;
+  tag: string;
+}
+
+function ModeCard({ title, desc, mode, icon, href, clue, accent }: { title: string, desc: string, mode: string, icon: React.ReactNode, href?: string, clue?: string, accent: ModeAccent }) {
   return (
-    <Link href={`/play?mode=${mode}`} className="block group">
-      <Card className={`w-72 h-64 transition-all duration-300 bg-card/40 backdrop-blur-sm border-2 ${color} hover:scale-105 hover:shadow-xl`}>
-        <CardContent className="flex flex-col items-center justify-center h-full p-6 text-center space-y-4">
-          <div className="p-4 rounded-2xl bg-muted group-hover:bg-muted/80 transition-colors">
-            {icon}
+    <Link href={href || `/play?mode=${mode}`} className="block group relative">
+      <Card className={`relative h-full min-h-[210px] overflow-hidden transition-all duration-300 bg-card/40 backdrop-blur-sm border-2 ${accent.border} ${accent.hoverBorder} hover:-translate-y-1.5 hover:shadow-2xl ${accent.shadow} cursor-pointer`}>
+        {/* Hover glow background */}
+        <div className={`absolute inset-0 bg-gradient-to-br ${accent.glow} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
+        <CardContent className="flex flex-col items-center justify-center h-full p-6 text-center space-y-4 relative">
+          <div className={`p-4 rounded-2xl ${accent.bg} transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
+            <span className={accent.text}>{icon}</span>
           </div>
           <h3 className="text-xl font-bold font-headline">{title}</h3>
           <p className="text-sm text-muted-foreground">{desc}</p>
+          {clue && (
+            <p className="text-xs text-muted-foreground italic line-clamp-2">{clue}</p>
+          )}
+          {/* Click affordance */}
+          <div className="flex items-center gap-1.5 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+            <span className={`text-[11px] font-black uppercase tracking-widest ${accent.tag} px-3 py-1 rounded-full`}>
+              Play
+            </span>
+            <ArrowRight className={`w-4 h-4 ${accent.text} transition-transform group-hover:translate-x-0.5`} />
+          </div>
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function StatPill({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-border/50 bg-card/40 backdrop-blur-sm px-5 py-4 transition-colors hover:border-primary/40">
+      <div className="p-2.5 rounded-xl bg-muted/60">{icon}</div>
+      <div className="text-left">
+        <p className="text-[11px] text-muted-foreground font-black uppercase tracking-widest">{label}</p>
+        <p className="text-2xl font-black tabular-nums">{value}</p>
+      </div>
+    </div>
   );
 }
 

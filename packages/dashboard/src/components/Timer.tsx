@@ -11,15 +11,22 @@ interface TimerProps {
   className?: string;
 }
 
+const toEpochMs = (value: number | null): number | null => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return value;
+  return new Date(value).getTime();
+};
+
 export const Timer: React.FC<TimerProps> = ({ expiresAt, onExpire, className }) => {
   const [timeLeft, setTimeLeft] = useState<number>(0);
+  const deadline = toEpochMs(expiresAt);
   const totalTime = 60000; // 60 seconds
 
   useEffect(() => {
-    if (!expiresAt) return;
+    if (!deadline) return;
 
     const interval = setInterval(() => {
-      const remaining = Math.max(0, expiresAt - Date.now());
+      const remaining = Math.max(0, deadline - Date.now());
       setTimeLeft(remaining);
 
       if (remaining <= 0) {
@@ -29,9 +36,9 @@ export const Timer: React.FC<TimerProps> = ({ expiresAt, onExpire, className }) 
     }, 100);
 
     return () => clearInterval(interval);
-  }, [expiresAt, onExpire]);
+  }, [deadline, onExpire]);
 
-  if (!expiresAt) return null;
+  if (!deadline) return null;
 
   const percentage = (timeLeft / totalTime) * 100;
   const isRunningOut = timeLeft < 5000;

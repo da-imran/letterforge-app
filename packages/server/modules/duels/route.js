@@ -1,0 +1,103 @@
+const express = require('express');
+const { authRequired, optionalAuth } = require('../../middleware/auth');
+
+module.exports = (duelService) => {
+    const router = express.Router();
+
+    // Create a duel (challenger's game is created server-side)
+    router.post('/', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Create a duel'
+        // #swagger.description = 'Creates a duel (optionally with a chosen code) and a game for the challenger with shared letters'
+        try {
+            const { opponentId = null, letterCount, code } = req.body || {};
+            const duel = await duelService.createDuel({
+                userId: req.userId,
+                opponentId,
+                letterCount,
+                code,
+            });
+            res.status(201).json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Fetch a duel by ID (with per-caller gameId when authenticated)
+    router.get('/:duelId', optionalAuth, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Get a duel'
+        // #swagger.description = 'Returns duel details including both players\' scores'
+        try {
+            const { duelId } = req.params;
+            const duel = await duelService.getDuel(duelId, req.userId);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Enter a duel and get (or create) the caller's game
+    router.post('/:duelId/enter', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Enter a duel'
+        // #swagger.description = 'Returns or creates the caller\'s game for the duel. An open duel\'s first joiner becomes the opponent.'
+        try {
+            const { duelId } = req.params;
+            const result = await duelService.enterDuel(duelId, req.userId);
+            res.json(result);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Join a duel by invite code
+    router.post('/join', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Join a duel by code'
+        // #swagger.description = 'Joins an open duel using its invite code and creates the caller\'s game'
+        try {
+            const { code } = req.body || {};
+            const result = await duelService.enterDuelByCode(code, req.userId);
+            res.json(result);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Fetch a duel by invite code (public preview)
+    router.get('/code/:code', optionalAuth, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Get a duel by code'
+        // #swagger.description = 'Returns duel details for a given invite code'
+        try {
+            const { code } = req.params;
+            const duel = await duelService.getDuelByCode(code, req.userId);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Submit the caller's final score for a duel game
+    router.post('/:duelId/submit', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Submit a duel score'
+        // #swagger.description = 'Records the caller\'s completed game score for the duel'
+        try {
+            const { duelId } = req.params;
+            const { gameId } = req.body || {};
+
+            if (!gameId) {
+                return res.status(400).json({ status: 400, message: 'gameId is required' });
+            }
+
+            const duel = await duelService.submitScore(duelId, req.userId, gameId);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    return router;
+};

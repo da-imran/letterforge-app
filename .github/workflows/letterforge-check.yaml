@@ -88,3 +88,37 @@ jobs:
 
       - name: Done
         run: echo "CI pipeline test stage completed."
+
+  frontend:
+    name: Frontend typecheck, build & test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: 'npm'
+
+      - name: Install workspace dependencies
+        run: npm install
+
+      - name: Typecheck
+        working-directory: packages/dashboard
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: packages/dashboard
+        run: npm test
+
+      - name: Build
+        working-directory: packages/dashboard
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+      - name: Done
+        run: echo "CI pipeline frontend stage completed."

@@ -1,4 +1,5 @@
 const mongo = require('../../utilities/mongodb');
+const { MILESTONES_DATA } = require('../../scripts/milestone_data');
 
 // Thresholds for unique-word-collection `special` milestones (id -> count).
 const UNIQUE_WORD_THRESHOLDS = {
@@ -49,12 +50,27 @@ class MilestoneService {
     this.client = client;
     this.collection = 'milestones';
     this.userCollection = 'users';
+    this.statsProvider = null;
   }
 
   /**
-   * Get all milestones from collection
+   * Inject a server-side stats provider (bound to a GameService). When set,
+   * milestone checks derive stats from real game data instead of trusting
+   * client-supplied numbers.
+   */
+  setStatsProvider(provider) {
+    this.statsProvider = provider;
+  }
+
+  /**
+   * Seed milestones data if not already present, then return all milestones.
+   * Idempotent: existing milestones (matched by `id`) are not overwritten.
    */
   async initializeMilestones() {
+    const existing = await mongo.findOne(this.client, this.collection, {});
+    if (!existing) {
+      await mongo.insertMany(this.client, this.collection, MILESTONES_DATA);
+    }
     return this.getAllMilestones();
   }
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const { authRequired } = require('../../middleware/auth');
 
 module.exports = (milestoneService) => {
     const router = express.Router();
@@ -52,7 +53,7 @@ module.exports = (milestoneService) => {
             const { milestoneId } = _req.params;
             const milestone = await milestoneService.getMilestoneById(milestoneId);
             if (!milestone) {
-                return res.status(404).json({ error: 'Milestone not found' });
+                return res.status(404).json({ status: 404, message: 'Milestone not found' });
             }
             res.json(milestone);
         } catch (err) {
@@ -61,14 +62,21 @@ module.exports = (milestoneService) => {
     });
 
     // Check and unlock milestones for user
-    router.post('/check/:userId', async (req, res, next) => {
+    router.post('/check/:userId', authRequired, async (req, res, next) => {
         // #swagger.tags = ['milestones']
         // #swagger.summary = 'Check and unlock milestones'
         // #swagger.description = 'Check user stats and unlock any achieved milestones'
         try {
             const { userId } = req.params;
-            const stats = req.body;
+            if (req.userId !== userId) {
+                return res.status(403).json({ status: 403, message: 'You can only check milestones for your own account' });
+            }
 
+            if (typeof milestoneService.statsProvider !== 'function') {
+                return res.status(400).json({ status: 400, message: 'Milestone stats are not available' });
+            }
+
+            const stats = await milestoneService.statsProvider(userId);
             const newlyUnlocked = await milestoneService.checkAndUnlockMilestones(userId, stats);
             res.json({
                 newlyUnlocked,

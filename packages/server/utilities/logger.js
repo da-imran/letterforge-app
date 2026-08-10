@@ -16,7 +16,6 @@ const CONSOLE_METHOD = {
 
 function formatLogLine(data) {
 	return Object.entries(data)
-		// eslint-disable-next-line no-unused-vars
 		.filter(([_, val]) => val !== undefined && val !== null)
 		.map(([key, val]) => `${key}=${JSON.stringify(val)}`)
 		.join(' ');

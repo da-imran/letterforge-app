@@ -1,5 +1,9 @@
-/* eslint-disable */
 require('dotenv').config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'letterforge-dev-secret-change-me';
+if (!process.env.JWT_SECRET) {
+    console.warn('[env] JWT_SECRET is not set - using an insecure development fallback. Set JWT_SECRET in production.');
+}
 
 module.exports = {
     HOSTNAME: process.env.HOSTNAME || 'localhost',
@@ -12,4 +16,6 @@ module.exports = {
     MONGO_URI: process.env.MONGO_URI || 'mongodb://localhost:27017/', // Default MongoDB localhost URI
     MONGODB_DBNAME: process.env.MONGODB_DBNAME || 'data',
     NODE_ENV: process.env.NODE_ENV || 'development', // local - env when running npm run dev / npm start
+    JWT_SECRET,
+    JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 };

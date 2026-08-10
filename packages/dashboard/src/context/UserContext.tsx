@@ -1,14 +1,15 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
-import { api } from '@/lib/api';
+import { api, getToken, setToken, onUnauthorized } from '@/lib/api';
 
 interface UserContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, nickname?: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -19,69 +20,64 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+  }, []);
+
   useEffect(() => {
-    const storedUserId = localStorage.getItem('letterforge_user_id');
-    if (storedUserId) {
-      api.getUserById(storedUserId)
+    let cancelled = false;
+
+    if (getToken()) {
+      api.getMe()
         .then((fetchedUser) => {
-          if (fetchedUser) {
-            setUser(fetchedUser);
-          } else {
-            localStorage.removeItem('letterforge_user_id');
-          }
+          if (!cancelled) setUser(fetchedUser);
         })
         .catch(() => {
-          localStorage.removeItem('letterforge_user_id');
-          setUser(null);
+          // getMe already clears the token and fires the unauthorized event on 401.
+          if (!cancelled) setUser(null);
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
     } else {
       setIsLoading(false);
     }
+
+    const offUnauthorized = onUnauthorized(() => {
+      if (!cancelled) setUser(null);
+    });
+
+    return () => {
+      cancelled = true;
+      offUnauthorized();
+    };
   }, []);
 
-  const login = async (email: string) => {
+  const login = async (email: string, password: string) => {
+    const { token, user: loggedInUser } = await api.login(email, password);
+    setToken(token);
+    setUser(loggedInUser);
+  };
+
+  const register = async (email: string, password: string, nickname?: string) => {
+    const { token, user: registeredUser } = await api.register(email, password, nickname);
+    setToken(token);
+    setUser(registeredUser);
+  };
+
+  const refreshUser = useCallback(async () => {
+    if (!getToken()) return;
     try {
-      // First try to create user directly (backend handles duplicates)
-      let targetUser = await api.createUser(email);
-
-      // If creation failed (409 email exists), try to fetch existing user
-      if (!targetUser) {
-        targetUser = await api.getUserByEmail(email);
-      }
-
-      if (!targetUser) {
-        throw new Error("Could not initialize user session. The forge might be temporarily unavailable.");
-      }
-
-      setUser(targetUser);
-      localStorage.setItem('letterforge_user_id', targetUser._id);
-    } catch (error: any) {
-      console.error("Login session failure:", error);
-      throw error;
+      const updated = await api.getMe();
+      setUser(updated);
+    } catch (e) {
+      console.error('User refresh error:', e);
     }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('letterforge_user_id');
-  };
-
-  const refreshUser = async () => {
-    if (user?._id) {
-      try {
-        const updated = await api.getUserById(user._id);
-        if (updated) {
-          setUser(updated);
-        }
-      } catch (e) {
-        console.error("User refresh error:", e);
-      }
-    }
-  };
+  }, []);
 
   return (
-    <UserContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, logout, refreshUser }}>
+    <UserContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, register, logout, refreshUser }}>
       {children}
     </UserContext.Provider>
   );

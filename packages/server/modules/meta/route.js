@@ -1,9 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { GameMode } = require('../game/type');
 
 const { VERSION, SERVICE_NAME } = require('../../utilities/env');
-const { GAME_CONFIG } = require('../../utilities/constant');
+const { GAME_CONFIG, MODE_CONFIG } = require('../../utilities/constant');
 
 router.get('/meta', (req, res) => {
     // #swagger.tags = ['meta']
@@ -12,7 +11,7 @@ router.get('/meta', (req, res) => {
     res.json({
         service: SERVICE_NAME,
         apiVersion: VERSION,
-        modes: [GameMode.NORMAL, GameMode.TIME_ATTACK],
+        modes: Object.keys(MODE_CONFIG),
         maxLetterCount: GAME_CONFIG.MAX_LETTERS,
         uptime: process.uptime(),
     });

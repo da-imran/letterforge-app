@@ -1,5 +1,3 @@
-'use client';
-
 import {
   GameMode,
   Period,
@@ -8,204 +6,287 @@ import {
   ResetLettersResponse,
   LeaderboardEntry,
   User,
+  UserRank,
   UserTotalScore,
-  GameResult
+  GameResult,
+  AuthResponse,
+  UserStats,
+  Milestone,
+  Duel,
+  DailyChallenge
 } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/letter-forge/v1';
-const API_BASE_URL = `${API_URL}${API_BASE}`;
+const TOKEN_KEY = 'letterforge_token';
 
-const EXPECTED_STATUS_CODES = [400, 404, 409];
+function getApiBaseUrl(): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/letter-forge/v1';
+  return `${apiUrl}${apiBase}`;
+}
 
-async function fetchJson<T>(url: string, options?: RequestInit, defaultValue: T = null as unknown as T): Promise<T> {
+export class ApiError extends Error {
+  status: number;
+  data?: unknown;
+
+  constructor(status: number, message: string, data?: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
+  }
+}
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (token) {
+    window.localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    window.localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+const UNAUTHORIZED_EVENT = 'letterforge:unauthorized';
+
+export function notifyUnauthorized(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+  }
+}
+
+export function onUnauthorized(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(UNAUTHORIZED_EVENT, callback);
+  return () => window.removeEventListener(UNAUTHORIZED_EVENT, callback);
+}
+
+async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  let res: Response;
   try {
-    const res = await fetch(`${API_BASE_URL}${url}`, {
-      ...(options ?? {}),
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers ?? {}),
-      },
-    });
+    res = await fetch(`${getApiBaseUrl()}${url}`, { ...(options ?? {}), headers });
+  } catch (err) {
+    throw new ApiError(0, 'Network error - could not reach the server. Please try again.', err);
+  }
 
-    if (!res.ok) {
-      if (!EXPECTED_STATUS_CODES.includes(res.status)) {
-        let errorData: any = {};
-        try {
-          errorData = await res.json();
-        } catch (e) {
-          errorData = { message: 'Failed to parse error response as JSON' };
-        }
-
-        console.error(`[LetterForge API Error] ${options?.method ?? 'GET'} ${url}:`, {
-          status: res.status,
-          statusText: res.statusText,
-          error: errorData
-        });
+  if (!res.ok) {
+    let message = `Request failed with status ${res.status}`;
+    let data: unknown;
+    try {
+      data = await res.json();
+      if (data && typeof data === 'object' && 'message' in (data as object)) {
+        const candidate = (data as { message?: unknown }).message;
+        if (typeof candidate === 'string' && candidate) message = candidate;
       }
-      return defaultValue;
+    } catch {
+      // Response body was not JSON.
     }
 
-    return await res.json();
-  } catch (error) {
-    console.error(`[LetterForge Network Error] ${options?.method ?? 'GET'} ${url}:`, error);
-    return defaultValue;
+    if (res.status === 401) {
+      setToken(null);
+      notifyUnauthorized();
+    }
+
+    throw new ApiError(res.status, message, data);
   }
+
+  if (res.status === 204) {
+    return undefined as unknown as T;
+  }
+
+  return res.json();
 }
 
 // API Service
 export const api = {
-  // Meta API
-  getMeta: async () => {
-    return fetchJson('/meta', {}, {});
+  // Auth API
+  register: async (email: string, password: string, nickname?: string): Promise<AuthResponse> => {
+    return fetchJson<AuthResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, nickname, password }),
+    });
   },
 
-  getHealth: async () => {
-    return fetchJson('/health', {}, {});
+  login: async (email: string, password: string): Promise<AuthResponse> => {
+    return fetchJson<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  getMe: async (): Promise<User> => {
+    return fetchJson<User>('/auth/me');
   },
 
   // Users API
-  createUser: async (email: string, nickname?: string): Promise<User | null> => {
-    return fetchJson<User | null>('/users', {
-      method: 'POST',
-      body: JSON.stringify({ email, nickname }),
-    }, null);
+  getUserById: async (userId: string): Promise<User> => {
+    return fetchJson<User>(`/users/${userId}`);
   },
 
-  getUserByNickname: async (nickname: string): Promise<User | null> => {
-    return fetchJson<User | null>(`/users?nickname=${encodeURIComponent(nickname)}`, {}, null);
+  getUserByNickname: async (nickname: string): Promise<User> => {
+    return fetchJson<User>(`/users?nickname=${encodeURIComponent(nickname)}`);
   },
 
-  getUserByEmail: async (email: string): Promise<User | null> => {
-    return fetchJson<User | null>(`/users?email=${encodeURIComponent(email)}`, {}, null);
+  getUserStats: async (userId: string): Promise<UserStats> => {
+    return fetchJson<UserStats>(`/users/${userId}/stats`);
   },
 
-  getUserById: async (userId: string): Promise<User | null> => {
-    return fetchJson<User | null>(`/users/${userId}`, {}, null);
-  },
-
-  updateUser: async (userId: string, nickname: string): Promise<User | null> => {
-    return fetchJson<User | null>(`/users/${userId}`, {
+  updateUser: async (userId: string, nickname: string): Promise<User> => {
+    return fetchJson<User>(`/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify({ nickname }),
-    }, null);
+    });
   },
 
   deleteUser: async (userId: string): Promise<{ message: string }> => {
-    return fetchJson<{ message: string }>(`/users/${userId}`, {
-      method: 'DELETE',
-    }, { message: 'Operation failed' });
+    return fetchJson<{ message: string }>(`/users/${userId}`, { method: 'DELETE' });
   },
 
   // Games API
-  createGame: async (data: { mode: GameMode; userId?: string; letterCount?: number; letters?: string[] }): Promise<Game | null> => {
-    return fetchJson<Game | null>('/games', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }, null);
+  getDailyChallenge: async (): Promise<DailyChallenge> => {
+    return fetchJson<DailyChallenge>('/challenge/today');
   },
 
-  loadGame: async (gameId: string): Promise<Game | null> => {
-    return fetchJson<Game | null>(`/games/${gameId}`, {}, null);
+  createGame: async (data: { mode: GameMode; letterCount?: number; letters?: string[] }): Promise<Game> => {
+    return fetchJson<Game>('/games', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  loadGame: async (gameId: string): Promise<Game> => {
+    return fetchJson<Game>(`/games/${gameId}`);
   },
 
   submitWord: async (gameId: string, word: string): Promise<SubmitWordResponse> => {
     return fetchJson<SubmitWordResponse>(`/games/${gameId}/submit`, {
       method: 'POST',
       body: JSON.stringify({ word }),
-    }, { valid: false, points: 0, totalScore: 0 });
+    });
   },
 
   resetLetters: async (gameId: string, letterCount: number = 2): Promise<ResetLettersResponse> => {
     return fetchJson<ResetLettersResponse>(`/games/${gameId}/reset`, {
       method: 'POST',
       body: JSON.stringify({ letterCount }),
-    }, { letters: [], usedWords: [], totalScore: 0 });
+    });
   },
 
   refillBatch: async (gameId: string): Promise<{ letterBatch: string[][]; batchIndex: number; letters: string[] }> => {
     return fetchJson(`/games/${gameId}/batch`, {
       method: 'POST',
-    }, { letterBatch: [], batchIndex: 0, letters: [] });
+    });
   },
 
   completeGame: async (gameId: string): Promise<{ score: number; isCompleted: boolean }> => {
     return fetchJson<{ score: number; isCompleted: boolean }>(`/games/${gameId}/complete`, {
       method: 'POST',
-    }, { score: 0, isCompleted: true });
+    });
   },
 
-  getGameResult: async (gameId: string): Promise<GameResult | null> => {
-    return fetchJson<GameResult | null>(`/games/${gameId}/result`, {}, null);
+  getGameResult: async (gameId: string): Promise<GameResult> => {
+    return fetchJson<GameResult>(`/games/${gameId}/result`);
   },
 
   deleteGame: async (gameId: string): Promise<{ message: string }> => {
-    return fetchJson<{ message: string }>(`/games/${gameId}`, {
-      method: 'DELETE',
-    }, { message: 'Game deleted' });
+    return fetchJson<{ message: string }>(`/games/${gameId}`, { method: 'DELETE' });
   },
 
-  submitToLeaderboard: async (gameId: string, period: Period = 'all_time'): Promise<any> => {
+  submitToLeaderboard: async (gameId: string, period: Period = 'all_time'): Promise<{ message: string; score: object }> => {
     return fetchJson(`/games/${gameId}/leaderboard`, {
       method: 'POST',
       body: JSON.stringify({ period }),
-    }, null);
+    });
   },
 
   // Scores API
-  createScore: async (data: { userId: string; gameId: string; mode: GameMode; points: number }) => {
+  createScore: async (data: { userId: string; gameId: string; mode: GameMode; points: number }): Promise<object> => {
     return fetchJson('/scores', {
       method: 'POST',
       body: JSON.stringify(data),
-    }, null);
+    });
   },
 
-  getScoresByGame: async (gameId: string) => {
-    return fetchJson<any[]>(`/scores/game/${gameId}`, {}, []);
+  getScoresByGame: async (gameId: string): Promise<object[]> => {
+    return fetchJson<object[]>(`/scores/game/${gameId}`);
   },
 
-  getScoresByUser: async (userId: string) => {
-    return fetchJson<any[]>(`/scores/user/${userId}`, {}, []);
+  getScoresByUser: async (userId: string): Promise<object[]> => {
+    return fetchJson<object[]>(`/scores/user/${userId}`);
   },
 
   getUserTotalScore: async (userId: string, mode: GameMode, period: Period): Promise<UserTotalScore> => {
-    return fetchJson<UserTotalScore>(`/scores/user/${userId}/total?mode=${mode}&period=${period}`, {}, { totalScore: 0, gameCount: 0 });
+    return fetchJson<UserTotalScore>(`/scores/user/${userId}/total?mode=${mode}&period=${period}`);
   },
 
   // Leaderboards API
   getLeaderboard: async (mode: GameMode, period: Period, limit: number = 10, offset: number = 0): Promise<LeaderboardEntry[]> => {
-    return fetchJson<LeaderboardEntry[]>(`/leaderboard?mode=${mode}&period=${period}&limit=${limit}&offset=${offset}`, {}, []);
+    return fetchJson<LeaderboardEntry[]>(`/leaderboard?mode=${mode}&period=${period}&limit=${limit}&offset=${offset}`);
   },
 
-  submitLeaderboardScore: async (data: { userId: string; mode: GameMode; period: Period; score: number }) => {
+  submitLeaderboardScore: async (data: { userId: string; mode: GameMode; period: Period; score: number }): Promise<object> => {
     return fetchJson('/leaderboard/submit', {
       method: 'POST',
       body: JSON.stringify(data),
-    }, null);
+    });
   },
 
-  getUserRank: async (userId: string, period: Period) => {
-    return fetchJson(`/leaderboard/rank/${userId}?period=${period}`, {}, null);
-  },
-
-  // Get all leaderboard data for all users
-  getAllLeaderboard: async () => {
-    return fetchJson<any>('/leaderboard/all', {}, null);
+  getUserRank: async (userId: string, mode: GameMode, period: Period): Promise<UserRank> => {
+    return fetchJson<UserRank>(`/leaderboard/rank/${userId}?mode=${mode}&period=${period}`);
   },
 
   // Milestones API
-  getAllMilestones: async () => {
-    return fetchJson<any[]>('/milestones', {}, []);
+  getAllMilestones: async (): Promise<Milestone[]> => {
+    return fetchJson<Milestone[]>('/milestones');
   },
 
-  getUserMilestones: async (userId: string) => {
-    return fetchJson<any[]>(`/milestones/user/${userId}`, {}, []);
+  getUserMilestones: async (userId: string): Promise<Milestone[]> => {
+    return fetchJson<Milestone[]>(`/milestones/user/${userId}`);
   },
 
-  checkMilestones: async (userId: string, stats: any) => {
-    return fetchJson<{ newlyUnlocked: string[]; count: number }>(`/milestones/check/${userId}`, {
+  // Duels API
+  createDuel: async (letterCount?: number): Promise<Duel> => {
+    return fetchJson<Duel>('/duels', {
       method: 'POST',
-      body: JSON.stringify(stats),
-    }, { newlyUnlocked: [], count: 0 });
-  }
+      body: JSON.stringify({ letterCount }),
+    });
+  },
+
+  getDuel: async (duelId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}`);
+  },
+
+  enterDuel: async (duelId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/enter`, { method: 'POST' });
+  },
+
+  joinDuelByCode: async (code: string): Promise<Duel> => {
+    return fetchJson<Duel>('/duels/join', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  getDuelByCode: async (code: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/code/${encodeURIComponent(code)}`);
+  },
+
+  submitDuelScore: async (duelId: string, gameId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ gameId }),
+    });
+  },
 };
