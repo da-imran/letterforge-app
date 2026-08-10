@@ -214,12 +214,25 @@ start_services() {
   sleep 3
 
   # --- 8. Summary ---
+  LAN_IP=""
+  if command -v ipconfig &>/dev/null && ipconfig getifaddr en0 >/dev/null 2>&1; then
+    LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
+  fi
+  if [ -z "$LAN_IP" ] && command -v hostname &>/dev/null; then
+    LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+  fi
+
   echo ""
   echo -e "${BOLD}======================================${RESET}"
   echo -e "${GREEN}${BOLD}  Running!${RESET}"
   echo -e "  Dashboard  ->  ${CYAN}http://localhost:${DASHBOARD_PORT}${RESET}"
   echo -e "  API        ->  ${CYAN}http://localhost:${SERVER_PORT}/letter-forge/v1${RESET}"
   echo -e "  API docs   ->  ${CYAN}http://localhost:${SERVER_PORT}/letter-forge/v1/api-docs${RESET}"
+  if [ -n "$LAN_IP" ]; then
+    echo -e "  -- Same-network (LAN) --"
+    echo -e "  Dashboard  ->  ${CYAN}http://${LAN_IP}:${DASHBOARD_PORT}${RESET}"
+    echo -e "  API        ->  ${CYAN}http://${LAN_IP}:${SERVER_PORT}/letter-forge/v1${RESET}"
+  fi
   echo -e "  API logs   ->  ${CYAN}$SERVER_LOG${RESET}"
   echo -e "  Web logs   ->  ${CYAN}$DASHBOARD_LOG${RESET}"
   echo -e "${BOLD}======================================${RESET}"

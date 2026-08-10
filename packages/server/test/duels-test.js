@@ -71,7 +71,7 @@ describe('Duels (multiplayer)', () => {
         expect(challengerGame.letterBatch[0]).to.deep.equal(joined.letters);
     });
 
-    it('[DUEL / DU04] - Duel completes when both players submit scores', async () => {
+    it('[DUEL / DU04] - First player to submit ends the duel for both sides', async () => {
         const u1 = await userService.createUser({ nickname: 'duelist04a' });
         const u2 = await userService.createUser({ nickname: 'duelist04b' });
         const duel = await duelService.createDuel({ userId: u1._id.toString() });
@@ -86,23 +86,14 @@ describe('Duels (multiplayer)', () => {
             cGame._id.toString()
         );
 
-        expect(afterChallenger.challenger.score).to.equal(0);
+        // The first submission ends the duel immediately for both players.
+        expect(afterChallenger.status).to.equal('completed');
         expect(afterChallenger.challenger.submittedAt).to.be.ok;
-        expect(afterChallenger.status).to.equal('active');
+        expect(afterChallenger.result).to.be.ok;
 
+        // The opponent's game was auto-completed so their score is captured.
         const oGame = await gameService.loadGame(joined.myGameId, u2._id.toString());
-        await gameService.completeGame(oGame._id, u2._id.toString());
-        const finished = await duelService.submitScore(
-            duel._id.toString(),
-            u2._id.toString(),
-            oGame._id.toString()
-        );
-
-        expect(finished.status).to.equal('completed');
-        expect(['challenger', 'opponent', 'draw']).to.include(finished.result);
-        if (finished.result !== 'draw') {
-            expect(finished.winnerId).to.be.ok;
-        }
+        expect(oGame.isCompleted).to.equal(true);
     });
 
     it('[DUEL / DU05] - A game outside the duel cannot be submitted', async () => {
@@ -123,17 +114,28 @@ describe('Duels (multiplayer)', () => {
 
     it('[DUEL / DU06] - Scores cannot be submitted twice', async () => {
         const u1 = await userService.createUser({ nickname: 'duelist06a' });
+        const u2 = await userService.createUser({ nickname: 'duelist06b' });
         const duel = await duelService.createDuel({ userId: u1._id.toString() });
+        await duelService.enterDuelByCode(duel.code, u2._id.toString());
 
         const cGame = await gameService.loadGame(duel.myGameId, u1._id.toString());
         await gameService.completeGame(cGame._id, u1._id.toString());
-        await duelService.submitScore(duel._id.toString(), u1._id.toString(), cGame._id.toString());
+        const first = await duelService.submitScore(
+            duel._id.toString(),
+            u1._id.toString(),
+            cGame._id.toString()
+        );
 
-        const err = await duelService
-            .submitScore(duel._id.toString(), u1._id.toString(), cGame._id.toString())
-            .catch(e => e);
+        // Second submission by the same player is ignored (duel already settled).
+        const second = await duelService.submitScore(
+            duel._id.toString(),
+            u1._id.toString(),
+            cGame._id.toString()
+        );
 
-        expect(err.status).to.equal(400);
+        expect(second.status).to.equal('completed');
+        expect(second.result).to.equal(first.result);
+        expect(second.winnerId).to.equal(first.winnerId);
     });
 
     it('[DUEL / DU07] - Both players connect by entering the same code', async () => {
@@ -285,5 +287,74 @@ describe('Duels (multiplayer)', () => {
         );
         expect(res.status).to.equal('completed');
         expect(res.result).to.equal('challenger');
+    });
+
+    it('[DUEL / DU14] - Reset letters deals an identical rack to both players', async () => {
+        const u1 = await userService.createUser({ nickname: 'duelist14a' });
+        const u2 = await userService.createUser({ nickname: 'duelist14b' });
+        const duel = await duelService.createDuel({ userId: u1._id.toString() });
+        const joined = await duelService.enterDuelByCode(duel.code, u2._id.toString());
+
+        const resetter = await duelService.resetLetters(duel._id.toString(), u1._id.toString());
+        expect(resetter.letters).to.be.an('array');
+
+        // Both games must now surface the identical letter rack.
+        const cGame = await gameService.loadGame(duel.myGameId, u1._id.toString());
+        const oGame = await gameService.loadGame(joined.myGameId, u2._id.toString());
+        expect(cGame.letters).to.deep.equal(oGame.letters);
+        expect(cGame.letters).to.deep.equal(resetter.letters);
+        expect(oGame.usedWords).to.deep.equal([]);
+    });
+
+    it('[DUEL / DU15] - Both players see the shared reset through the live update', async () => {
+        const u1 = await userService.createUser({ nickname: 'duelist15a' });
+        const u2 = await userService.createUser({ nickname: 'duelist15b' });
+        const duel = await duelService.createDuel({ userId: u1._id.toString() });
+        const joined = await duelService.enterDuelByCode(duel.code, u2._id.toString());
+
+        // The reset is broadcast via `duel:updated`.
+        let broadcast = null;
+        duelService.once('duel:updated', (id) => { broadcast = id; });
+
+        const resetter = await duelService.resetLetters(duel._id.toString(), u1._id.toString());
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(broadcast).to.equal(duel._id.toString());
+
+        // The shared letters propagate to BOTH players' games.
+        const cGame = await gameService.loadGame(duel.myGameId, u1._id.toString());
+        const oGame = await gameService.loadGame(joined.myGameId, u2._id.toString());
+        expect(cGame.letters).to.deep.equal(resetter.letters);
+        expect(oGame.letters).to.deep.equal(resetter.letters);
+
+        // Non-participants cannot reset a duel.
+        const rogue = await userService.createUser({ nickname: 'rogue15' });
+        const err = await duelService
+            .resetLetters(duel._id.toString(), rogue._id.toString())
+            .catch((e) => e);
+        expect(err.status).to.equal(403);
+    });
+
+    it('[DUEL / DU16] - Completed duel reset is rejected', async () => {
+        const u1 = await userService.createUser({ nickname: 'duelist16a' });
+        const u2 = await userService.createUser({ nickname: 'duelist16b' });
+        const duel = await duelService.createDuel({ userId: u1._id.toString() });
+        const joined = await duelService.enterDuelByCode(duel.code, u2._id.toString());
+
+        const cGame = await gameService.loadGame(duel.myGameId, u1._id.toString());
+        await gameService.completeGame(cGame._id, u1._id.toString());
+        await duelService.submitScore(duel._id.toString(), u1._id.toString(), cGame._id.toString());
+
+        const err = await duelService
+            .resetLetters(duel._id.toString(), u1._id.toString())
+            .catch((e) => e);
+        expect(err.status).to.equal(409);
+
+        // Opponent's game was auto-completed by the first submission.
+        const oGame = await gameService.loadGame(joined.myGameId, u2._id.toString());
+        expect(oGame.isCompleted).to.equal(true);
+
+        const after = await duelService.getDuel(duel._id.toString(), u1._id.toString());
+        expect(after.status).to.equal('completed');
     });
 });

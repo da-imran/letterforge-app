@@ -79,6 +79,20 @@ module.exports = (duelService) => {
         }
     });
 
+    // Reset the shared letters for both players in a duel
+    router.post('/:duelId/reset', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Reset shared letters'
+        // #swagger.description = 'Deals a fresh, identical set of letters to both players and notifies them live'
+        try {
+            const { duelId } = req.params;
+            const duel = await duelService.resetLetters(duelId, req.userId);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
     // Submit the caller's final score for a duel game
     router.post('/:duelId/submit', authRequired, async (req, res, next) => {
         // #swagger.tags = ['duels']

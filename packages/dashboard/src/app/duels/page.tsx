@@ -252,13 +252,23 @@ export default function DuelsPage() {
                 ) : (
                   <p className="text-lg font-black text-secondary">{participantLabel(duel, 'opponent')} wins!</p>
                 )}
-                {duel.result !== 'draw' && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {duel.result === 'challenger'
-                      ? 'Your opponent was disconnected for too long.'
-                      : 'You were disconnected for too long.'}
-                  </p>
-                )}
+                {duel.result !== 'draw' && (() => {
+                  const loserSlot = duel.result === 'challenger' ? 'opponent' : 'challenger';
+                  const loser = duel[loserSlot];
+                  return loser?.forfeited ? (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {loser.userId === myUserId
+                        ? 'You were disconnected for too long.'
+                        : 'Your opponent was disconnected for too long.'}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {duel.result === 'challenger'
+                        ? (duel.challenger.userId === myUserId ? 'You ended the game first.' : 'Your opponent ended the game first.')
+                        : (duel.opponent.userId === myUserId ? 'You ended the game first.' : 'Your opponent ended the game first.')}
+                    </p>
+                  );
+                })()}
               </div>
             )}
 

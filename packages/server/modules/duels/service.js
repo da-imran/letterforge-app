@@ -86,6 +86,8 @@ class DuelService extends EventEmitter {
             { _id: duel._id },
             { $set: {
                 status: duel.status,
+                letters: duel.letters,
+                letterBatch: duel.letterBatch,
                 challenger: duel.challenger,
                 opponent: duel.opponent,
                 winnerId: duel.winnerId,
@@ -273,7 +275,7 @@ class DuelService extends EventEmitter {
             _id: duel._id,
             code: duel.code,
             letterCount: duel.letterCount,
-            letters: duel.letterBatch ? duel.letterBatch[0] : null,
+            letters: duel.letters || (duel.letterBatch ? duel.letterBatch[0] : null),
             mode: duel.mode,
             maxRounds: duel.maxRounds,
             status: duel.status,
@@ -333,6 +335,7 @@ class DuelService extends EventEmitter {
             code: duelCode,
             mode: 'normal_mode',
             letterCount: finalLetterCount,
+            letters: letterBatch[0],
             letterBatch,
             maxRounds: DUEL_MAX_ROUNDS,
             status: 'open',
@@ -458,23 +461,22 @@ class DuelService extends EventEmitter {
 
     /**
      * Record a participant's final score from their completed duel game.
+     *
+     * Completing your game ends the duel for both players immediately: your
+     * opponent's game is auto-completed with its current score so both sides
+     * settle on a level playing field (the higher final score wins).
      */
     async submitScore(duelId, userId, gameId) {
         const duel = await this._load(duelId);
 
-        // A forfeited/completed duel is final — no score submission can
+        // A completed (or forfeited) duel is final — no score submission can
         // change the outcome. Return the settled view to the caller.
         if (duel.status === 'completed') {
             return this._toPublic(duel, userId);
         }
 
-        const challengerId = duel.challenger.userId?.toString();
-        const opponentId = duel.opponent.userId?.toString();
-
-        let slot;
-        if (challengerId === userId) slot = 'challenger';
-        else if (opponentId === userId) slot = 'opponent';
-        else throw new HttpError(403, 'You are not a participant in this duel');
+        const slot = this._slotForUser(duel, userId);
+        if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
 
         const participant = duel[slot];
 
@@ -501,21 +503,103 @@ class DuelService extends EventEmitter {
         participant.lastActiveAt = new Date();
         participant.disconnectedAt = null;
 
-        const bothSubmitted = duel.challenger.submittedAt && duel.opponent.submittedAt;
-        if (bothSubmitted) {
-            duel.status = 'completed';
-            const challengerScore = duel.challenger.score;
-            const opponentScore = duel.opponent.score;
-            if (challengerScore > opponentScore) {
-                duel.result = 'challenger';
-                duel.winnerId = duel.challenger.userId;
-            } else if (opponentScore > challengerScore) {
-                duel.result = 'opponent';
-                duel.winnerId = duel.opponent.userId;
+        const otherSlot = slot === 'challenger' ? 'opponent' : 'challenger';
+        const other = duel[otherSlot];
+
+        // When the first player ends the game, end the opponent's game too so
+        // both sides settle: freeze their current score without submitting it.
+        if (other && other.userId && !other.submittedAt) {
+            await this._autoCompleteParticipant(duel, other);
+        }
+
+        // Both scores are now decided (a missing opponent score counts as 0),
+        // so the duel concludes on the first submission.
+        duel.status = 'completed';
+        const challengerScore = duel.challenger.score ?? 0;
+        const opponentScore = duel.opponent.score ?? 0;
+        if (challengerScore > opponentScore) {
+            duel.result = 'challenger';
+            duel.winnerId = duel.challenger.userId;
+        } else if (opponentScore > challengerScore) {
+            duel.result = 'opponent';
+            duel.winnerId = duel.opponent.userId;
+        } else {
+            duel.result = 'draw';
+            duel.winnerId = null;
+        }
+
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Freeze the partner participant's game so the duo settles on a level
+     * playing field: their game is completed (if still open) and their score
+     * is captured without submitting on their behalf.
+     */
+    async _autoCompleteParticipant(duel, participant) {
+        if (!participant || !participant.userId || !participant.gameId) return;
+        if (!this.gameService) return;
+        try {
+            const userId = participant.userId.toString();
+            const game = await this.gameService.loadGame(participant.gameId, userId);
+            if (!game.isCompleted) {
+                const completed = await this.gameService.completeGame(participant.gameId, userId);
+                participant.score = completed.score ?? 0;
             } else {
-                duel.result = 'draw';
-                duel.winnerId = null;
+                participant.score = game.score ?? 0;
             }
+            participant.lastActiveAt = new Date();
+            participant.disconnectedAt = null;
+        } catch (err) {
+            console.error('Failed to auto-complete duel participant game:', err.message);
+        }
+    }
+
+    /**
+     * Reset the shared letters for a duel so both players receive an identical
+     * new rack. The caller's reset is applied across both participants' games
+     * (same predetermined letters) and broadcast live via `duel:updated`.
+     */
+    async resetLetters(duelId, userId) {
+        const duel = await this._load(duelId);
+
+        const slot = this._slotForUser(duel, userId);
+        if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
+        if (duel.status === 'completed') throw new HttpError(409, 'Duel already completed');
+
+        const newLetters = randomLetters(duel.letterCount);
+
+        for (const s of ['challenger', 'opponent']) {
+            const participant = duel[s];
+            if (participant && participant.userId && participant.gameId && this.gameService) {
+                try {
+                    const existing = await this.gameService.loadGame(participant.gameId, participant.userId.toString());
+                    if (!existing.isCompleted) {
+                        await this.gameService.resetLetters(
+                            participant.gameId,
+                            duel.letterCount,
+                            newLetters,
+                            participant.userId.toString()
+                        );
+                    }
+                } catch (err) {
+                    console.error(`Failed to reset duel game for slot ${s}:`, err.message);
+                }
+            }
+        }
+
+        // Keep the shared preview (duel.letters) in sync so the WS snapshot
+        // carries the freshly dealt letters to the waiting player.
+        if (Array.isArray(duel.letterBatch)) {
+            duel.letterBatch[0] = newLetters;
+        }
+        duel.letters = newLetters;
+
+        const actor = duel[slot];
+        if (actor) {
+            actor.lastActiveAt = new Date();
+            actor.disconnectedAt = null;
         }
 
         await this._save(duel);

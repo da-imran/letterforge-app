@@ -18,10 +18,22 @@ import {
 
 const TOKEN_KEY = 'letterforge_token';
 
+function getApiOrigin(): string {
+  if (typeof window === 'undefined') return 'http://localhost:8888';
+  const configured = process.env.NEXT_PUBLIC_API_URL || '';
+  // A loopback override (localhost/127.0.0.1) is the dev default — ignore it
+  // and derive the API host from the host serving this page so LAN devices
+  // hit the server's real address (not their own localhost).
+  const isLoopbackOverride = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\/?/.test(configured);
+  if (configured && !isLoopbackOverride) {
+    return configured.replace(/\/$/, '');
+  }
+  return `${window.location.protocol}//${window.location.hostname}:8888`;
+}
+
 function getApiBaseUrl(): string {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
   const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/letter-forge/v1';
-  return `${apiUrl}${apiBase}`;
+  return `${getApiOrigin()}${apiBase}`;
 }
 
 export class ApiError extends Error {
@@ -211,7 +223,12 @@ export const api = {
     });
   },
 
-  // Scores API
+  // Duels API
+  resetDuelLetters: async (duelId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/reset`, {
+      method: 'POST',
+    });
+  },
   createScore: async (data: { userId: string; gameId: string; mode: GameMode; points: number }): Promise<object> => {
     return fetchJson('/scores', {
       method: 'POST',

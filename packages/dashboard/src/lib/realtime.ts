@@ -1,10 +1,21 @@
 import { Duel } from '@/types';
 import { getToken } from '@/lib/api';
 
-const API_ORIGIN =
+const getApiOrigin = () =>
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888').replace(/\/$/, '')
+    ? (() => {
+        const configured = process.env.NEXT_PUBLIC_API_URL || '';
+        // Loopback overrides are the dev default — ignore them and use the
+        // host serving this page so LAN devices reach the server's address.
+        const isLoopbackOverride = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\/?/.test(configured);
+        if (configured && !isLoopbackOverride) {
+          return configured.replace(/\/$/, '');
+        }
+        return `${window.location.protocol}//${window.location.hostname}:8888`;
+      })()
     : 'http://localhost:8888';
+
+const API_ORIGIN = getApiOrigin();
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 10_000;

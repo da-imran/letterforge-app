@@ -49,8 +49,13 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
   const [showConfetti, setShowConfetti] = useState(false);
   const [opponentScore, setOpponentScore] = useState<number | null>(null);
   const [opponentName, setOpponentName] = useState<string>('Opponent');
+  const [duelResult, setDuelResult] = useState<{ result: 'challenger' | 'opponent' | 'draw'; winnerId: string | null } | null>(null);
+  const [lastResetAt, setLastResetAt] = useState(0);
+  const gameRef = useRef<Game>(initialGame);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => { gameRef.current = game; }, [game]);
 
   const modeLabel = duelId ? 'Duel' : (MODE_LABELS[game.mode] ?? game.mode.replace('_', ' '));
 
@@ -59,9 +64,33 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
     if (!duelId) return;
     const unsubscribe = subscribeToDuel(duelId, (duel: Duel) => {
       const me = user?._id ?? null;
+      const mine = duel.challenger?.userId === me ? duel.challenger : duel.opponent;
       const theirs = duel.challenger?.userId === me ? duel.opponent : duel.challenger;
       setOpponentScore(theirs?.score ?? null);
       setOpponentName(theirs?.nickname || 'Opponent');
+
+      // When the opponent ends the game, the server closes the duel and
+      // auto-completes the other player's game — end the local board so both
+      // sides resolve at once.
+      if (duel.status === 'completed' && !gameRef.current.isCompleted) {
+        setDuelResult({ result: duel.result ?? 'draw', winnerId: duel.winnerId ?? null });
+        api.loadGame(gameRef.current._id)
+          .then((g) => {
+            setGame(g);
+            setShowConfetti(true);
+          })
+          .catch(() => {});
+        return;
+      }
+
+      // Shared letter resets: when the opponent deals a new rack, sync ours.
+      const incomingLetters = duel.letters;
+      if (incomingLetters && !gameRef.current.isCompleted) {
+        const cur = gameRef.current.letters;
+        if (cur.length !== incomingLetters.length || cur.some((l, i) => l !== incomingLetters[i])) {
+          api.loadGame(gameRef.current._id).then(setGame).catch(() => {});
+        }
+      }
     });
     return unsubscribe;
   }, [duelId, user?._id]);
@@ -279,7 +308,12 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
     if (isResetting || game.isCompleted) return;
     setIsResetting(true);
     try {
-      await api.resetLetters(game._id);
+      if (duelId) {
+        // In a duel, a reset deals a fresh rack to BOTH players.
+        await api.resetDuelLetters(duelId);
+      } else {
+        await api.resetLetters(game._id);
+      }
       const updatedGame = await api.loadGame(game._id);
       if (updatedGame) {
         setGame(updatedGame);
@@ -288,9 +322,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
           localStorage.setItem(getBatchKey(), JSON.stringify(updatedGame.letterBatch));
         }
         localStorage.setItem(getBatchIndexKey(), String(updatedGame.batchIndex ?? 0));
-        // Note: do NOT clear chain letter here - it must persist across resets in chain mode
       }
       setWord('');
+      setLastResetAt(Date.now());
       toast({ title: "Letters Forged!", description: "New letters available." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Reset Failed", description: error.message });
@@ -421,7 +455,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
             <div className="flex flex-wrap justify-center gap-4 sm:gap-6 py-6">
               {getDisplayLetters().map((letter, idx) => (
                 <LetterTile
-                  key={`${letter}-${idx}-${game.round ?? 0}`}
+                  key={`${letter}-${idx}-${game.round ?? 0}-${lastResetAt}`}
                   letter={letter}
                   onClick={() => !game.isCompleted && handleLetterClick(letter)}
                   className={game.isCompleted ? "opacity-50 grayscale pointer-events-none" : ""}
@@ -486,31 +520,50 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame, duelId }) => 
                 {game.mode === 'daily_challenge' ? 'Challenge Submitted!' : 'Forge Finished!'}
               </h2>
 
-              {game.mode === 'daily_challenge' ? (
-                <div className="space-y-2 max-w-md mx-auto">
-                  <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Your Score</p>
-                  <p className="text-5xl font-black text-amber-500 tabular-nums">{game.score}</p>
-                  <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                    <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-1">Today's Answer</p>
-                    <p className="text-3xl font-black text-amber-500 uppercase tracking-widest">{game.dailyAnswer || '—'}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex justify-center gap-4">
-                  <Button asChild variant="secondary">
-                    <a href="/leaderboard">View Leaderboard</a>
-                  </Button>
-                  {duelId ? (
-                    <Button asChild>
-                      <a href="/duels">View Duel</a>
-                    </Button>
-                  ) : (
-                    <Button asChild>
-                      <a href={`/play?mode=${game.mode}`}>Forge Again</a>
-                    </Button>
-                  )}
-                </div>
-              )}
+               {game.mode === 'daily_challenge' ? (
+                 <div className="space-y-2 max-w-md mx-auto">
+                   <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Your Score</p>
+                   <p className="text-5xl font-black text-amber-500 tabular-nums">{game.score}</p>
+                   <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+                     <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-1">Today's Answer</p>
+                     <p className="text-3xl font-black text-amber-500 uppercase tracking-widest">{game.dailyAnswer || '—'}</p>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="flex flex-col items-center gap-4">
+                   {duelId && duelResult && duelResult.result !== 'draw' && (
+                     <div className="text-center">
+                       {duelResult.winnerId === (user?._id ?? null) ? (
+                         <p className="text-2xl font-black text-amber-500">You Win!</p>
+                       ) : (
+                         <p className="text-2xl font-black text-secondary">{opponentName} Wins</p>
+                       )}
+                       <p className="text-sm text-muted-foreground mt-1">
+                         {user?._id === duelResult.winnerId
+                           ? 'Your opponent ended the game early.'
+                           : 'You ended the game first.'}
+                       </p>
+                     </div>
+                   )}
+                   {duelId && duelResult?.result === 'draw' && (
+                     <p className="text-2xl font-black text-amber-500">It&apos;s a Draw!</p>
+                   )}
+                   <div className="flex justify-center gap-4">
+                     <Button asChild variant="secondary">
+                       <a href="/leaderboard">View Leaderboard</a>
+                     </Button>
+                     {duelId ? (
+                       <Button asChild>
+                         <a href="/duels">View Duel</a>
+                       </Button>
+                     ) : (
+                       <Button asChild>
+                         <a href={`/play?mode=${game.mode}`}>Forge Again</a>
+                       </Button>
+                     )}
+                   </div>
+                 </div>
+               )}
             </div>
           )}
         </CardContent>

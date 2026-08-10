@@ -20,10 +20,31 @@ function validateWord(word, requiredLetters = []) {
         return false;
     }
 
-    if (!Array.isArray(requiredLetters) ||
-        !requiredLetters.every(letter => normalized.includes(letter))
-    ) {
+    // Every required letter must appear in the word at least as many times as
+    // it appears in the rack (multiset containment). A plain `includes` check
+    // ignores multiplicity, so a rack of ["c","a","c"] wrongly accepted "can"
+    // (only one "c"). Counting frequencies fixes that.
+    if (!Array.isArray(requiredLetters)) {
         return false;
+    }
+    if (requiredLetters.length > 0) {
+        const wordFreq = {};
+        for (const ch of normalized) {
+            wordFreq[ch] = (wordFreq[ch] || 0) + 1;
+        }
+
+        const requiredFreq = {};
+        for (const ch of requiredLetters) {
+            const lower = typeof ch === 'string' ? ch.toLowerCase() : '';
+            if (!lower) continue;
+            requiredFreq[lower] = (requiredFreq[lower] || 0) + 1;
+        }
+
+        for (const ch of Object.keys(requiredFreq)) {
+            if ((wordFreq[ch] || 0) < requiredFreq[ch]) {
+                return false;
+            }
+        }
     }
 
     try {
