@@ -79,6 +79,21 @@ module.exports = (duelService) => {
         }
     });
 
+    // Start the duel for both players (admin picks the mode first)
+    router.post('/:duelId/start', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Start a duel'
+        // #swagger.description = 'The creator selects a game mode and starts the duel; both players\' games are created together'
+        try {
+            const { duelId } = req.params;
+            const { mode } = req.body || {};
+            const duel = await duelService.startDuel(duelId, req.userId, mode);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
     // Reset the shared letters for both players in a duel
     router.post('/:duelId/reset', authRequired, async (req, res, next) => {
         // #swagger.tags = ['duels']

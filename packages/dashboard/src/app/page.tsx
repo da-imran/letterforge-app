@@ -164,7 +164,7 @@ export default function Home() {
                 />
                 <ModeCard
                   title="Daily Challenge"
-                  desc="One shared puzzle a day. Solve message of the day to score."
+                  desc="One shared puzzle a day. Solve meaning of the day to score."
                   mode="daily_challenge"
                   icon={<Sun className="w-7 h-7" />}
                   accent={{

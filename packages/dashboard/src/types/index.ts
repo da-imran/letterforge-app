@@ -1,4 +1,5 @@
 export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode' | 'daily_challenge';
+export type DuelMode = Exclude<GameMode, 'daily_challenge'>;
 export type Period = 'daily' | 'weekly' | 'all_time';
 
 export interface DailyChallenge {
@@ -8,7 +9,7 @@ export interface DailyChallenge {
   seed: string;
 }
 
-export type DuelStatus = 'open' | 'active' | 'completed';
+export type DuelStatus = 'open' | 'active' | 'playing' | 'completed';
 export type DuelResult = 'challenger' | 'opponent' | 'draw' | null;
 
 export interface DuelParticipant {
@@ -26,13 +27,14 @@ export interface Duel {
   code: string;
   letterCount: number;
   letters: string[] | null;
-  mode: GameMode;
-  maxRounds: number;
+  mode: DuelMode | null;
+  maxRounds: number | null;
   status: DuelStatus;
   result: DuelResult;
   winnerId: string | null;
   createdAt: string;
   updatedAt: string;
+  startedAt: string | null;
   challenger: DuelParticipant;
   opponent: DuelParticipant;
   myGameId: string | null;

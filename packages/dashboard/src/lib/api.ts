@@ -1,5 +1,6 @@
 import {
   GameMode,
+  DuelMode,
   Period,
   Game,
   SubmitWordResponse,
@@ -293,6 +294,13 @@ export const api = {
     return fetchJson<Duel>('/duels/join', {
       method: 'POST',
       body: JSON.stringify({ code }),
+    });
+  },
+
+  startDuel: async (duelId: string, mode: DuelMode): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ mode }),
     });
   },
 

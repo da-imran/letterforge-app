@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { subscribeToDuel, ConnectionState } from '@/lib/realtime';
-import { Duel } from '@/types';
+import { Duel, DuelMode } from '@/types';
 import { useUser } from '@/context/UserContext';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,23 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Swords, Loader2, Copy, Check, Play, Users, Trophy, Shuffle } from 'lucide-react';
+import { Swords, Loader2, Copy, Check, Play, Users, Trophy, Shuffle, Flag } from 'lucide-react';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+const DUEL_MODES: { value: DuelMode; label: string; description: string }[] = [
+  { value: 'normal_mode', label: 'Normal', description: 'Classic forging, 10 rounds' },
+  { value: 'time_attack', label: 'Time Attack', description: 'Race a 60-second clock' },
+  { value: 'survival_mode', label: 'Survival', description: 'Every miss costs a life' },
+  { value: 'chain_mode', label: 'Chain', description: 'Chain letters into words' },
+];
+
+const MODE_LABELS: Record<string, string> = {
+  normal_mode: 'Normal Mode',
+  time_attack: 'Time Attack',
+  survival_mode: 'Survival Mode',
+  chain_mode: 'Chain Mode',
+};
 
 function participantLabel(duel: Duel, key: 'challenger' | 'opponent'): string {
   const p = duel[key];
@@ -31,6 +45,8 @@ export default function DuelsPage() {
   const [duel, setDuel] = useState<Duel | null>(null);
   const [code, setCode] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<DuelMode>('normal_mode');
   const [copied, setCopied] = useState(false);
   const [live, setLive] = useState<ConnectionState>('closed');
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -53,6 +69,14 @@ export default function DuelsPage() {
       unsubscribeRef.current = null;
     };
   }, [duel?._id]);
+
+  // When the host starts the game, BOTH players are dealt simultaneously —
+  // take everyone to the game page in realtime so play begins together.
+  useEffect(() => {
+    if (duel?.status === 'playing' && duel.myGameId) {
+      router.push(`/play?duelId=${duel._id}`);
+    }
+  }, [duel?.status, duel?.myGameId, duel?._id, router]);
 
   // Both players type the same code: the first to enter creates the duel,
   // the second joins it.
@@ -103,6 +127,22 @@ export default function DuelsPage() {
   const startPlaying = () => {
     if (!duel?.myGameId) return;
     router.push(`/play?duelId=${duel._id}`);
+  };
+
+  const amChallenger = duel?.challenger.userId === (user?._id ?? null);
+
+  const handleStart = async () => {
+    if (!duel || isStarting) return;
+    setIsStarting(true);
+    try {
+      const updated = await api.startDuel(duel._id, selectedMode);
+      setDuel(updated);
+      toast({ title: "Duel Started!", description: "Both players are in the game now. Good luck!" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Start Failed", description: err.message });
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   if (userLoading) {
@@ -182,29 +222,30 @@ export default function DuelsPage() {
               <div>
                 <CardTitle className="flex items-center gap-3">
                   <Badge
-                    variant={duel.status === 'completed' ? 'secondary' : duel.status === 'active' ? 'default' : 'outline'}
+                    variant={
+                      duel.status === 'completed' ? 'secondary'
+                        : (duel.status === 'active' || duel.status === 'playing') ? 'default'
+                          : 'outline'
+                    }
                     className="gap-2"
                   >
-                    {duel.status === 'active' && (
+                    {(duel.status === 'active' || duel.status === 'playing') && (
                       <span
                         className={`h-2 w-2 rounded-full ${live === 'open' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}
                       />
                     )}
                     {duel.status.toUpperCase()}
-                    {duel.status === 'active' && live === 'reconnecting' && <> · RECONNECTING</>}
+                    {(duel.status === 'active' || duel.status === 'playing') && live === 'reconnecting' && <> · RECONNECTING</>}
                   </Badge>
                   <span className="text-muted-foreground font-mono text-lg">{duel.code}</span>
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  {duel.letterCount} letters · {duel.maxRounds} rounds
+                  {duel.letterCount} letters
+                  {duel.mode ? ` · ${MODE_LABELS[duel.mode] ?? duel.mode}` : ' · mode not chosen yet'}
+                  {duel.maxRounds ? ` · ${duel.maxRounds} rounds` : ''}
                 </CardDescription>
               </div>
-              {isParticipant && !duel.myGameId && (
-                <Button onClick={() => api.enterDuel(duel._id).then(setDuel)} variant="outline">
-                  Enter Duel
-                </Button>
-              )}
-              {isParticipant && duel.myGameId && duel.status !== 'completed' && (
+              {isParticipant && duel.status === 'playing' && duel.myGameId && (
                 <Button onClick={startPlaying} className="gap-2">
                   <Play className="w-4 h-4" />
                   Play Now
@@ -242,6 +283,50 @@ export default function DuelsPage() {
                 )}
               </div>
             </div>
+
+            {duel.status === 'active' && isParticipant && (
+              <div className="rounded-2xl border border-border/40 bg-muted/20 p-4 space-y-4">
+                {amChallenger ? (
+                  <>
+                    <div className="text-center space-y-1">
+                      <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">
+                        You&apos;re the host — pick the mode
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Choosing a mode and starting deals both players the same
+                        rack and begins the game together.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {DUEL_MODES.map((m) => (
+                        <Button
+                          key={m.value}
+                          type="button"
+                          size="sm"
+                          variant={selectedMode === m.value ? 'default' : 'outline'}
+                          onClick={() => setSelectedMode(m.value)}
+                        >
+                          {m.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-center text-xs text-muted-foreground">
+                      {DUEL_MODES.find((m) => m.value === selectedMode)?.description}
+                    </p>
+                    <Button onClick={handleStart} disabled={isStarting} className="w-full gap-2">
+                      {isStarting && <Loader2 className="w-4 h-4 animate-spin" />}
+                      <Flag className="w-4 h-4" />
+                      Select Mode
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    Waiting for {duel.challenger.nickname || 'the host'} to pick a mode and start...
+                  </div>
+                )}
+              </div>
+            )}
 
             {duel.status === 'completed' && (
               <div className="text-center">

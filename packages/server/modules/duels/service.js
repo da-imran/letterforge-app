@@ -86,12 +86,14 @@ class DuelService extends EventEmitter {
             { _id: duel._id },
             { $set: {
                 status: duel.status,
+                mode: duel.mode,
                 letters: duel.letters,
                 letterBatch: duel.letterBatch,
                 challenger: duel.challenger,
                 opponent: duel.opponent,
                 winnerId: duel.winnerId,
                 result: duel.result,
+                startedAt: duel.startedAt,
                 updatedAt: duel.updatedAt,
             } }
         );
@@ -169,7 +171,7 @@ class DuelService extends EventEmitter {
      * Idempotent, safe to run on every tick.
      */
     async checkDisconnections(now = Date.now()) {
-        const active = await mongo.find(this.client, this.collection, { status: 'active' });
+        const active = await mongo.find(this.client, this.collection, { status: 'playing' });
         for (const duel of active) {
             const challenger = duel.challenger;
             const opponent = duel.opponent;
@@ -283,6 +285,7 @@ class DuelService extends EventEmitter {
             winnerId: duel.winnerId ? duel.winnerId.toString() : null,
             createdAt: duel.createdAt,
             updatedAt: duel.updatedAt,
+            startedAt: duel.startedAt || null,
             challenger: {
                 userId: duel.challenger?.userId ? duel.challenger.userId.toString() : null,
                 nickname: nicknames[duel.challenger?.userId?.toString()] || 'Unknown',
@@ -306,10 +309,9 @@ class DuelService extends EventEmitter {
     }
 
     /**
-     * Create a duel and immediately create the challenger's game so play can
-     * start. The opponent joins later via the same invite code. When `code`
-     * is omitted a random one is generated; when supplied it is used as-is
-     * (both players type the same code to connect).
+     * Create a duel. The challenger (admin) is the inviter; the mode is not
+     * chosen yet and no games are created — the admin picks the mode and
+     * startDuel deals games to BOTH players so they begin together.
      */
     async createDuel({ userId, opponentId = null, letterCount = DUEL_LETTER_COUNT, code = null }) {
         const finalLetterCount = this._validateLetterCount(letterCount);
@@ -333,12 +335,14 @@ class DuelService extends EventEmitter {
 
         const duel = {
             code: duelCode,
-            mode: 'normal_mode',
+            // Mode is not decided yet — the admin picks it before starting.
+            mode: null,
             letterCount: finalLetterCount,
             letters: letterBatch[0],
             letterBatch,
-            maxRounds: DUEL_MAX_ROUNDS,
+            maxRounds: null,
             status: 'open',
+            startedAt: null,
             challenger: emptyParticipant(userId),
             opponent: emptyParticipant(opponentId),
             winnerId: null,
@@ -358,17 +362,9 @@ class DuelService extends EventEmitter {
         }
         duel._id = result.insertedId;
 
-        // Challenger's game is created server-side with the shared batch.
-        const game = await this._createDuelGame(duel, 'challenger', userId);
-        duel.challenger.gameId = game._id;
-
-        await mongo.updateOne(
-            this.client,
-            this.collection,
-            { _id: duel._id },
-            { $set: { challenger: duel.challenger } }
-        );
-        this.emit('duel:updated', duel._id.toString());
+        // No games are created yet — both are dealt together by startDuel so
+        // the two players begin at the same time.
+        await this._save(duel);
 
         return this._toPublic(duel, userId);
     }
@@ -382,12 +378,57 @@ class DuelService extends EventEmitter {
         throw new HttpError(500, 'Could not generate a unique duel code');
     }
 
+    /**
+     * Start the duel for both players at once. Only the challenger (admin) can
+     * start, and they must pick a mode first. Both participants' games are
+     * created in the same call, so neither player can begin before the other.
+     */
+    async startDuel(duelId, userId, mode) {
+        const duel = await this._load(duelId);
+
+        if (this._slotForUser(duel, userId) !== 'challenger') {
+            throw new HttpError(403, 'Only the duel creator can start the game');
+        }
+        if (duel.status === 'completed') {
+            throw new HttpError(409, 'Duel already completed');
+        }
+        if (!duel.opponent?.userId) {
+            throw new HttpError(400, 'Waiting for your opponent to join before you can start');
+        }
+        if (duel.status === 'playing') {
+            return this._toPublic(duel, userId);
+        }
+
+        const allowedModes = ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'];
+        if (!mode || !allowedModes.includes(mode)) {
+            throw new HttpError(400, 'Select a game mode before starting the duel');
+        }
+
+        duel.mode = mode;
+        duel.maxRounds = (mode === 'time_attack' || mode === 'survival_mode') ? null : DUEL_MAX_ROUNDS;
+
+        // Deal to BOTH players in the same request so they start together.
+        for (const slot of ['challenger', 'opponent']) {
+            const participant = duel[slot];
+            if (!participant.gameId) {
+                const game = await this._createDuelGame(duel, slot, participant.userId.toString());
+                participant.gameId = game._id;
+                participant.score = 0;
+            }
+        }
+
+        duel.status = 'playing';
+        duel.startedAt = new Date();
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
     async _createDuelGame(duel, slot, userId) {
         if (!this.gameService) {
             throw new HttpError(500, 'Game service unavailable');
         }
         return this.gameService.createGame({
-            mode: 'normal_mode',
+            mode: duel.mode || 'normal_mode',
             letterCount: duel.letterCount,
             letterBatch: duel.letterBatch,
             userId,
@@ -445,13 +486,9 @@ class DuelService extends EventEmitter {
         }
 
         const participant = duel[slot];
-        if (!participant.gameId) {
-            const game = await this._createDuelGame(duel, slot, userId);
-            participant.gameId = game._id;
-            participant.score = 0;
-        }
 
-        // Activity proof — reconnecting/entering counts as alive.
+        // Activity proof — reconnecting/entering counts as alive. Games are
+        // not created here: both are dealt together by startDuel.
         participant.lastActiveAt = new Date();
         participant.disconnectedAt = null;
 
@@ -477,6 +514,10 @@ class DuelService extends EventEmitter {
 
         const slot = this._slotForUser(duel, userId);
         if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
+
+        if (duel.status !== 'playing') {
+            throw new HttpError(400, 'The duel has not started yet');
+        }
 
         const participant = duel[slot];
 
@@ -567,6 +608,7 @@ class DuelService extends EventEmitter {
         const slot = this._slotForUser(duel, userId);
         if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
         if (duel.status === 'completed') throw new HttpError(409, 'Duel already completed');
+        if (duel.status !== 'playing') throw new HttpError(400, 'The duel has not started yet');
 
         const newLetters = randomLetters(duel.letterCount);
 
