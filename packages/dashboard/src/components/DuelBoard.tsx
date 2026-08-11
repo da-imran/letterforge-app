@@ -40,8 +40,10 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
   const [isResetting, setIsResetting] = useState(false);
   const [isRefillingBatch, setIsRefillingBatch] = useState(false);
   const [lastFeedback, setLastFeedback] = useState<{ type: 'success' | 'duplicate' | 'error', points?: number, reason?: string } | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [opponentScore, setOpponentScore] = useState<number | null>(null);
   const [opponentName, setOpponentName] = useState<string>('Opponent');
+  const [duelResult, setDuelResult] = useState<{ result: 'challenger' | 'opponent' | 'draw'; winnerId: string | null } | null>(null);
   const [lastResetAt, setLastResetAt] = useState(0);
   const gameRef = useRef<Game>(initialGame);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,10 +62,15 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
       setOpponentName(theirs?.nickname || 'Opponent');
 
       // When either player ends the game, the server closes the duel and
-      // auto-completes the other side's game — return BOTH players home
-      // immediately so the match feels synchronized.
-      if (duel.status === 'completed' && !gameRef.current.isCompleted) {
-        router.push('/');
+      // auto-completes the other side's game — show a shared results screen to
+      // both players. They stay here until one of them chooses to go home, so
+      // both get to review the final score first.
+      if (duel.status === 'completed' && !duelResult) {
+        setDuelResult({ result: duel.result ?? 'draw', winnerId: duel.winnerId ?? null });
+        setShowConfetti(true);
+        api.loadGame(gameRef.current._id)
+          .then((g) => setGame(g))
+          .catch(() => {});
         return;
       }
 
@@ -229,13 +236,12 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
           // Mark game as completed first, then submit to leaderboard.
           await api.completeGame(game._id);
           await api.submitToLeaderboard(game._id, 'daily');
-          // Record the final score for the matchup — this ends the duel for
-          // both sides and broadcasts to the opponent.
+          // Record the final score — this ends the duel for both sides and
+          // tells the opponent (via WS) to show their results too.
           await submitDuelIfNeeded();
           refreshUser();
           clearLocalBatch();
           toast({ title: "Game Over!", description: `Final Score: ${response.totalScore}` });
-          router.push('/');
         }
 
         setWord('');
@@ -313,7 +319,7 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
         await api.submitToLeaderboard(game._id, 'daily');
 
         // Record the final score — this ends the duel for both sides and
-        // tells the opponent (via WS) to return home too.
+        // tells the opponent (via WS) to show their results too.
         await submitDuelIfNeeded();
 
         // Refresh user so freshly unlocked milestones appear
@@ -323,7 +329,6 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
         clearLocalBatch();
 
         toast({ title: "Game Over!", description: `Final Score: ${updatedGame.score}` });
-        router.push('/');
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Completion Error", description: error.message });
@@ -446,17 +451,51 @@ export const DuelBoard: React.FC<DuelBoardProps> = ({ initialGame, duelId }) => 
             )}
           </form>
 
-          {game.isCompleted && (
-            <div className="text-center space-y-4 py-4">
-              <h2 className="text-3xl font-black text-primary">Duel Finished!</h2>
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">
-                  Returning you to the home page...
-                </p>
+            {game.isCompleted && (
+              <div className="text-center space-y-4 py-4">
+                <h2 className="text-3xl font-black text-primary">Duel Finished!</h2>
+                <div className="flex flex-col items-center gap-2">
+                  {duelResult ? (
+                    <>
+                      {duelResult.result === 'draw' ? (
+                        <p className="text-2xl font-black text-amber-500">It&apos;s a Draw!</p>
+                      ) : (
+                        <p className="text-2xl font-black">
+                          {duelResult.winnerId === (user?._id ?? null) ? (
+                            <span className="text-amber-500">You Win!</span>
+                          ) : (
+                            <span className="text-secondary">{opponentName} Wins</span>
+                          )}
+                        </p>
+                      )}
+                      <p className="text-sm text-muted-foreground">
+                        Final Score &middot; You {game.score} : {opponentScore ?? '–'} {opponentName}
+                      </p>
+                      <div className="flex justify-center gap-4 mt-2">
+                        <Button asChild variant="secondary">
+                          <a href="/leaderboard">View Leaderboard</a>
+                        </Button>
+                        <Button onClick={() => { clearLocalBatch(); router.push('/'); }} className="gap-2">
+                          Return to Main Page
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        You finished your rack. Waiting for your opponent to finish&hellip;
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Final Score so far &middot; You {game.score} : {opponentScore ?? '–'} {opponentName}
+                      </p>
+                      <Button onClick={() => { clearLocalBatch(); router.push('/'); }} className="gap-2 mt-2">
+                        Return to Main Page
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </CardContent>
 
         <CardFooter className="bg-muted/10 p-4 border-t border-border/20 flex justify-between">
