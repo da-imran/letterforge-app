@@ -3,7 +3,7 @@ const { optionalAuth, authRequired } = require('../../middleware/auth');
 const { PERIODS } = require('../../utilities/constant');
 const { getTodayChallenge } = require('../../utilities/daily-challenge');
 
-module.exports = (gameService, scoreService) => {
+module.exports = (gameService, scoreService, scoreProducer) => {
     const router = express.Router();
 
     // Daily challenge: today's shared clue (the answer word is never exposed).
@@ -148,14 +148,30 @@ module.exports = (gameService, scoreService) => {
                 return res.status(403).json({ status: 403, message: 'You can only submit your own scores', requestId: req.id });
             }
 
-            // Submit to scores collection (leaderboard aggregates from this)
-            const score = await scoreService.createScore({
+            const scorePayload = {
                 userId: gameResult.userId,
                 gameId: gameId,
                 mode: gameResult.mode,
-                points: gameResult.score
-            });
+                points: gameResult.score,
+            };
 
+            // Decoupled write path: hand the score to a background worker via
+            // RabbitMQ and respond immediately (202 Accepted). Falls back to
+            // the synchronous write when the broker is unavailable/disabled so
+            // the endpoint never fails because of the queue.
+            if (scoreProducer) {
+                const published = await scoreProducer.publishScoreSubmitted(scorePayload);
+                if (published) {
+                    return res.status(202).json({
+                        status: 202,
+                        message: 'Score submitted for background processing',
+                        requestId: req.id,
+                    });
+                }
+            }
+
+            // Synchronous fallback (RabbitMQ disabled or unavailable).
+            const score = await scoreService.createScore(scorePayload);
             res.json({
                 message: 'Score submitted to leaderboard',
                 score: score

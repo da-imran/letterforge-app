@@ -21,7 +21,7 @@ module.exports = async (app, config, scoreServiceParam, milestoneServiceParam, p
 
     app.use(
         `/${ROUTE_PREPEND}/${VERSION}`,
-        gameRoutes(gameService, scoreService)
+        gameRoutes(gameService, scoreService, config.scoreProducer)
     );
 
     return gameService;

@@ -69,7 +69,7 @@ export default function Home() {
           <h1 className="font-headline text-4xl font-extrabold tracking-tighter sm:text-5xl md:text-6xl lg:text-7xl mb-6">
             Forge Your Words in <br className="hidden sm:inline" />
             <span className="bg-gradient-to-r from-primary via-secondary to-primary bg-[length:200%_auto] animate-gradient bg-clip-text text-transparent">
-              The LetterForge Engine
+              The LetterForge
             </span>
           </h1>
           
@@ -83,6 +83,7 @@ export default function Home() {
             </div>
           ) : (
             <div className="flex flex-col items-center gap-10 w-full">
+              <p className="text-muted-foreground italic">Welcome back, <span className="text-foreground font-bold">{displayName}</span>!</p>
               {/* Player context strip */}
               <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <StatPill
@@ -194,7 +195,6 @@ export default function Home() {
                   href="/duels"
                 />
               </div>
-              <p className="text-muted-foreground italic">Welcome back, <span className="text-foreground font-bold">{displayName}</span>!</p>
             </div>
           )}
         </div>

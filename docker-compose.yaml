@@ -15,6 +15,8 @@ services:
       MONGODB_DBNAME: ${MONGODB_DBNAME:-data}
       MONGO_URI: mongodb://mongodb:27017/${MONGODB_DBNAME:-data}
       PORT: 8888
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URI: amqp://rabbitmq:5672
     ports:
       - "8888:8888"
     networks:
@@ -22,8 +24,49 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: on-failure
     command: ["npm", "start"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: letter-forge-worker
+    environment:
+      NODE_ENV: dev
+      MONGODB_DBNAME: ${MONGODB_DBNAME:-data}
+      MONGO_URI: mongodb://mongodb:27017/${MONGODB_DBNAME:-data}
+      RABBITMQ_ENABLED: "true"
+      RABBITMQ_URI: amqp://rabbitmq:5672
+    networks:
+      - letter-forge-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: on-failure
+    command: ["node", "packages/server/worker.js"]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: letter-forge-rabbitmq
+    restart: unless-stopped
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - letter-forge-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   mongodb:
     image: mongo:7
@@ -48,3 +91,4 @@ networks:
 
 volumes:
   db_data:
+  rabbitmq_data:

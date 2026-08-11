@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "concurrently -n server,dashboard -c blue,magenta \"npm:dev:server\" \"npm:dev:dashboard\"",
     "dev:server": "npm run dev --workspace packages/server",
+    "dev:worker": "npm run dev:worker --workspace packages/server",
+    "start:worker": "npm run start:worker --workspace packages/server",
     "dev:dashboard": "npm run dev --workspace packages/dashboard",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

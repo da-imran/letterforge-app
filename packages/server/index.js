@@ -1,6 +1,7 @@
 module.exports = async (app, config) => {
 	await require('./modules/meta')(app, config);
 	await require('./modules/auth')(app, config);
+	await require('./modules/scoring')(app, config);
 	const scoreService = await require('./modules/scores')(app, config);
 	const milestoneService = await require('./modules/milestones')(app, config);
 	const progressionService = await require('./modules/progression')(app, config);
@@ -14,4 +15,5 @@ module.exports = async (app, config) => {
 	await require('./modules/users')(app, config, gameService);
 	const leaderboardService = await require('./modules/leaderboards')(app, config, scoreService);
 	config.leaderboardService = leaderboardService;
+	await require('./modules/scoring/consumer')(app, config);
 };
