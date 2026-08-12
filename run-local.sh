@@ -3,13 +3,16 @@
 # run-local.sh - Run the LetterForge monorepo locally
 #
 # Usage:
-#   ./run-local.sh start     # Start both server and dashboard
-#   ./run-local.sh stop      # Stop both services
-#   ./run-local.sh restart   # Restart both services
+#   ./run-local.sh start     # Start server, dashboard, and score worker
+#   ./run-local.sh stop      # Stop all services
+#   ./run-local.sh restart   # Restart all services
 #   ./run-local.sh logs      # Show recent logs
 #   ./run-local.sh status    # Check if services are running
 #   ./run-local.sh docker    # Start all services with Docker Compose
 #   ./run-local.sh docker-stop
+#
+# MongoDB and RabbitMQ are started automatically with Docker Compose when
+# they aren't already running.
 #
 # Override defaults with env vars:
 #   SERVER_PORT=8888 DASHBOARD_PORT=9002 MONGO_URI=mongodb://...
@@ -23,9 +26,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
 SERVER_PORT="${SERVER_PORT:-8888}"
 DASHBOARD_PORT="${DASHBOARD_PORT:-9002}"
+RABBITMQ_PORT="${RABBITMQ_PORT:-5672}"
 PID_FILE="${PID_FILE:-$LOG_DIR/app.pid}"
 SERVER_LOG="${SERVER_LOG:-$LOG_DIR/server.log}"
 DASHBOARD_LOG="${DASHBOARD_LOG:-$LOG_DIR/dashboard.log}"
+WORKER_LOG="${WORKER_LOG:-$LOG_DIR/worker.log}"
 
 # --- Colours ---
 RED='\033[0;31m'
@@ -45,6 +50,7 @@ die()     { error "$*"; exit 1; }
 save_pids() {
   echo "SERVER_PID=$SERVER_PID" > "$PID_FILE"
   echo "DASHBOARD_PID=$DASHBOARD_PID" >> "$PID_FILE"
+  echo "WORKER_PID=$WORKER_PID" >> "$PID_FILE"
 }
 
 load_pids() {
@@ -124,6 +130,41 @@ wait_for_mongodb() {
   return 1
 }
 
+# --- Wait for RabbitMQ ---
+# Auto-starts the RabbitMQ broker via Docker Compose when it isn't running,
+# then blocks until it answers on the AMQP port.
+wait_for_rabbitmq() {
+  local host="localhost"
+  local port="$RABBITMQ_PORT"
+  local timeout=30
+  local elapsed=0
+
+  info "Checking RabbitMQ on ${host}:${port}..."
+
+  if ! nc -z "$host" "$port" 2>/dev/null; then
+    if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+      info "RabbitMQ not running - starting it with Docker Compose..."
+      docker compose up -d rabbitmq
+    else
+      info "RabbitMQ not running and Docker unavailable - will retry in the background."
+      return 1
+    fi
+  fi
+
+  info "Waiting for RabbitMQ to be ready on ${host}:${port}..."
+  while [ $elapsed -lt $timeout ]; do
+    if nc -z "$host" "$port" 2>/dev/null; then
+      info "RabbitMQ is ready!"
+      return 0
+    fi
+
+    sleep 1
+    ((elapsed++))
+    info "Still waiting for RabbitMQ... (${elapsed}/${timeout}s)"
+  done
+  return 1
+}
+
 # --- Start services ---
 start_services() {
   echo -e "${BOLD}LetterForge - Monorepo Dev Runner${RESET}"
@@ -168,6 +209,13 @@ start_services() {
     info "Continuing anyway - the server will retry connection attempts."
   fi
 
+  # --- 3.5. Wait for RabbitMQ ---
+  if ! wait_for_rabbitmq; then
+    warn "RabbitMQ is not available after 30 seconds."
+    info "Start it with: docker compose up -d rabbitmq  (or ./run-local.sh docker)"
+    info "Continuing anyway - the server and worker will retry connection attempts."
+  fi
+
   # --- 4. Install dependencies ---
   info "Installing workspace dependencies..."
   npm install
@@ -209,6 +257,17 @@ start_services() {
   DASHBOARD_PID=$!
   info "Dashboard PID: $DASHBOARD_PID (logs: $DASHBOARD_LOG)"
 
+  # --- 7.5. Start score worker ---
+  # Consumes `score.submitted` from RabbitMQ so the API's async score writes
+  # are actually persisted. Idles gracefully when RabbitMQ is disabled.
+  info "Starting score worker (RabbitMQ consumer)..."
+  (
+    cd packages/server
+    npm run start:worker
+  ) > "$WORKER_LOG" 2>&1 &
+  WORKER_PID=$!
+  info "Score worker PID: $WORKER_PID (logs: $WORKER_LOG)"
+
   save_pids
 
   sleep 3
@@ -235,6 +294,7 @@ start_services() {
   fi
   echo -e "  API logs   ->  ${CYAN}$SERVER_LOG${RESET}"
   echo -e "  Web logs   ->  ${CYAN}$DASHBOARD_LOG${RESET}"
+  echo -e "  Worker logs ->  ${CYAN}$WORKER_LOG${RESET}"
   echo -e "${BOLD}======================================${RESET}"
   echo -e "  To stop:  ${BOLD}./run-local.sh stop${RESET}"
   echo -e "  To view logs:  ${BOLD}./run-local.sh logs${RESET}"
@@ -252,6 +312,13 @@ stop_services() {
     stopped=$((stopped + 1))
   fi
   if stop_on_port "Dashboard dev server" "$DASHBOARD_PORT" "${DASHBOARD_PID:-}"; then
+    stopped=$((stopped + 1))
+  fi
+
+  # The worker has no TCP port of its own; stop it via its PID/process group.
+  if is_running "${WORKER_PID:-}"; then
+    info "Stopping Score worker (PID: $WORKER_PID)..."
+    kill -- -"$WORKER_PID" 2>/dev/null || kill "$WORKER_PID" 2>/dev/null || true
     stopped=$((stopped + 1))
   fi
 
@@ -280,6 +347,9 @@ show_logs() {
   echo ""
   echo -e "${BOLD}=== DASHBOARD LOG (last 30 lines) ===${RESET}"
   tail -n 30 "$DASHBOARD_LOG" 2>/dev/null || echo "No dashboard log found"
+  echo ""
+  echo -e "${BOLD}=== WORKER LOG (last 30 lines) ===${RESET}"
+  tail -n 30 "$WORKER_LOG" 2>/dev/null || echo "No worker log found"
 }
 
 # --- Check status ---
@@ -297,6 +367,12 @@ show_status() {
     echo -e "  Dashboard:   ${GREEN}running (PID: $DASHBOARD_PID)${RESET}"
   else
     echo -e "  Dashboard:   ${RED}not running${RESET}"
+  fi
+
+  if is_running "${WORKER_PID:-}"; then
+    echo -e "  Score worker: ${GREEN}running (PID: $WORKER_PID)${RESET}"
+  else
+    echo -e "  Score worker: ${RED}not running${RESET}"
   fi
 }
 
@@ -366,9 +442,9 @@ case "${1:-start}" in
   docker-logs)  show_docker_logs ;;
   *)
     echo "Usage: $0 {start|stop|restart|logs|status|docker|docker-stop|docker-logs}"
-    echo "  start        - Start both services locally with npm (default)"
-    echo "  stop         - Stop both services"
-    echo "  restart      - Restart both services"
+    echo "  start        - Start server, dashboard, and score worker locally (default)"
+    echo "  stop         - Stop all services"
+    echo "  restart      - Restart all services"
     echo "  logs         - Show recent logs"
     echo "  status       - Check if services are running"
     echo "  docker       - Start all services with Docker Compose"

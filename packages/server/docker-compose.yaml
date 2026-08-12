@@ -51,7 +51,7 @@ services:
     command: ["npm", "run", "start:worker"]
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:management-alpine
     container_name: letter-forge-rabbitmq
     restart: unless-stopped
     volumes:

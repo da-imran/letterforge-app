@@ -11,10 +11,8 @@ WORKDIR /usr/src/app
 COPY package.json package-lock.json* ./
 COPY packages/server/package.json ./packages/server/
 
-# Install workspace dependencies.
-# Uses `npm install` (not `npm ci`) until package-lock.json is committed.
-# Switch to `npm ci` once a lockfile is in place for reproducible builds.
-RUN npm install
+# Install workspace dependencies with the committed lockfile for reproducible builds.
+RUN npm ci
 
 # Copy source code
 COPY packages/server/ ./packages/server/

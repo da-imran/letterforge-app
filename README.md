@@ -201,6 +201,8 @@ The launcher starts:
 - **Backend API** → http://localhost:8888
 - **Swagger Docs** → http://localhost:8888/letter-forge/v1/api-docs
 - **Frontend Dashboard** → http://localhost:9002
+- **Score worker** → RabbitMQ consumer for async score persistence
+- **MongoDB / RabbitMQ** → started automatically via Docker Compose when they aren't already running
 
 ### Run with Docker Compose
 
@@ -596,6 +598,7 @@ npm run dev:dashboard    # Frontend only (Next.js)
 
 ```bash
 npm install                    # Install all workspace dependencies
+npm start                      # Backend API in production mode (node packages/server/app.js)
 npm run dev                    # Start all services
 npm run dev:server            # Backend API (port 8888)
 npm run dev:worker            # Background worker

@@ -147,10 +147,54 @@ elif [ "$MONGO_RUNNING" = false ]; then
     print_warning "MongoDB not running and Docker not available. Start it manually before booting the server."
 fi
 
-# --- 5. Verify connection ---
+# --- 5. RabbitMQ ---
 echo ""
 echo "========================================="
-echo "Step 5: Verifying MongoDB connection..."
+echo "Step 5: Setting up RabbitMQ..."
+echo "========================================="
+
+rabbitmq_up() {
+    if command -v nc &> /dev/null; then
+        nc -z localhost 5672 &> /dev/null 2>&1
+    else
+        (exec 3<>/dev/tcp/localhost/5672) &> /dev/null 2>&1
+    fi
+}
+
+RABBITMQ_RUNNING=false
+if rabbitmq_up; then
+    RABBITMQ_RUNNING=true
+    print_success "RabbitMQ is already running on port 5672"
+else
+    print_warning "RabbitMQ is not running on port 5672"
+fi
+
+if [ "$RABBITMQ_RUNNING" = false ] && command -v docker &> /dev/null; then
+    echo "Starting RabbitMQ container..."
+    docker compose up -d rabbitmq
+
+    echo "Waiting for RabbitMQ to be ready..."
+    sleep 10
+    for i in {1..30}; do
+        if docker exec letter-forge-rabbitmq rabbitmq-diagnostics ping &> /dev/null 2>&1; then
+            print_success "RabbitMQ is ready"
+            RABBITMQ_RUNNING=true
+            break
+        fi
+        if [ $i -eq 30 ]; then
+            print_error "RabbitMQ failed to start"
+            exit 1
+        fi
+        sleep 2
+    done
+elif [ "$RABBITMQ_RUNNING" = false ]; then
+    print_warning "RabbitMQ not running and Docker not available. Start RabbitMQ manually on port 5672."
+fi
+
+# --- 6. Verify connection ---
+echo ""
+echo "========================================="
+echo "Step 6: Verifying MongoDB connection..."
 echo "========================================="
 
 # shellcheck disable=SC1091
@@ -166,10 +210,10 @@ else
     print_warning "mongosh not installed; skipping live verification."
 fi
 
-# --- 6. Swagger ---
+# --- 7. Swagger ---
 echo ""
 echo "========================================="
-echo "Step 6: Generating Swagger documentation..."
+echo "Step 7: Generating Swagger documentation..."
 echo "========================================="
 
 npm run swagger

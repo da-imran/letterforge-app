@@ -9,6 +9,7 @@
     "lib/*"
   ],
   "scripts": {
+    "start": "node packages/server/app.js",
     "dev": "concurrently -n server,dashboard -c blue,magenta \"npm:dev:server\" \"npm:dev:dashboard\"",
     "dev:server": "npm run dev --workspace packages/server",
     "dev:worker": "npm run dev:worker --workspace packages/server",
