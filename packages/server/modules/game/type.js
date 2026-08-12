@@ -3,6 +3,7 @@ const GameMode = {
   NORMAL: 'normal',
   SURVIVAL: 'survival_mode',
   CHAIN: 'chain_mode',
+  FADE: 'fade_mode',
 };
 
 const ALLOWED_MODES = [
@@ -10,6 +11,7 @@ const ALLOWED_MODES = [
   GameMode.TIME_ATTACK,
   GameMode.SURVIVAL,
   GameMode.CHAIN,
+  GameMode.FADE,
 ];
 
 module.exports = { GameMode, ALLOWED_MODES };

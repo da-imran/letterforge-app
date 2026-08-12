@@ -11,7 +11,7 @@ const { MONGO_URI } = require('../utilities/env');
 const FOUR_LETTER_WORDS = ['sand', 'area', 'care', 'date', 'ease', 'fame', 'gate', 'have', 'item', 'jazz', 'keep'];
 const FIVE_LETTER_WORDS = ['about', 'brick', 'cabin', 'daily', 'eagle', 'fairy', 'glass', 'heart', 'ideal', 'jewel'];
 
-describe('Survival Mode (lives)', () => {
+describe('Endless Mode (lives)', () => {
     let gameService;
     let mongoClient;
 

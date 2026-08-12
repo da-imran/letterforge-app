@@ -20,14 +20,14 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const DUEL_MODES: { value: DuelMode; label: string; description: string }[] = [
   { value: 'normal_mode', label: 'Normal', description: 'Classic forging, 10 rounds' },
   { value: 'time_attack', label: 'Time Attack', description: 'Race a 60-second clock' },
-  { value: 'survival_mode', label: 'Survival', description: 'Every miss costs a life' },
+  { value: 'survival_mode', label: 'Endless', description: 'Every miss costs a life' },
   { value: 'chain_mode', label: 'Chain', description: 'Chain letters into words' },
 ];
 
 const MODE_LABELS: Record<string, string> = {
   normal_mode: 'Normal Mode',
   time_attack: 'Time Attack',
-  survival_mode: 'Survival Mode',
+  survival_mode: 'Endless Mode',
   chain_mode: 'Chain Mode',
 };
 

@@ -8,9 +8,10 @@ interface LetterTileProps {
   isFlipped?: boolean;
   onClick?: () => void;
   className?: string;
+  glow?: boolean;
 }
 
-export const LetterTile: React.FC<LetterTileProps> = ({ letter, isFlipped = false, onClick, className }) => {
+export const LetterTile: React.FC<LetterTileProps> = ({ letter, isFlipped = false, onClick, className, glow = false }) => {
   const [internalFlip, setInternalFlip] = useState(false);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export const LetterTile: React.FC<LetterTileProps> = ({ letter, isFlipped = fals
         "hover:scale-110 hover:-translate-y-1 active:scale-95",
         "flex items-center justify-center border-b-4 border-black/20",
         internalFlip && "scale-y-0 opacity-0",
+        glow && "shadow-[0_0_25px_rgba(168,85,247,0.75)]",
         className
       )}
     >

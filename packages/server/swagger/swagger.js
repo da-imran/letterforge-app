@@ -116,7 +116,7 @@ const doc = {
       post: {
         tags: ['games'],
         summary: 'Create a new game',
-        description: 'Creates a new game with specified mode (normal_mode, time_attack, survival_mode, or chain_mode)',
+        description: 'Creates a new game with specified mode (normal_mode, time_attack, survival_mode, chain_mode, or fade_mode)',
         parameters: [
           {
             name: 'body',
@@ -124,7 +124,7 @@ const doc = {
             schema: {
               type: 'object',
               properties: {
-                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'], description: 'Game mode' },
+                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'], description: 'Game mode' },
                 letterCount: { type: 'integer', description: 'Number of letters (2 to 5)' },
                 letters: { type: 'array', items: { type: 'string' }, description: 'Predetermined letters (optional)' },
                 userId: { type: 'string', description: 'User ID (optional)' }
@@ -352,7 +352,7 @@ const doc = {
               properties: {
                 userId: { type: 'string' },
                 gameId: { type: 'string' },
-                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
+                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'] },
                 points: { type: 'integer' }
               },
               required: ['userId', 'gameId', 'mode', 'points']
@@ -387,7 +387,7 @@ const doc = {
         description: 'Returns total score and count for a user',
         parameters: [
           { name: 'userId', in: 'path', required: true, type: 'string' },
-          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
+          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'] },
           { name: 'period', in: 'query', required: true, type: 'string', enum: ['daily', 'weekly', 'all_time'] }
         ],
         responses: { '200': { description: 'OK' }, '400': { description: 'Bad Request' } }
@@ -399,7 +399,7 @@ const doc = {
         summary: 'Get leaderboard rankings',
         description: 'Returns paginated leaderboard rankings',
         parameters: [
-          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
+          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'] },
           { name: 'period', in: 'query', required: true, type: 'string', enum: ['daily', 'weekly', 'all_time'] },
           { name: 'limit', in: 'query', type: 'integer', default: 10 },
           { name: 'offset', in: 'query', type: 'integer', default: 0 }
@@ -421,7 +421,7 @@ const doc = {
               type: 'object',
               properties: {
                 userId: { type: 'string' },
-                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
+                mode: { type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'] },
                 period: { type: 'string', enum: ['daily', 'weekly', 'all_time'] },
                 score: { type: 'integer' }
               },
@@ -439,7 +439,7 @@ const doc = {
         description: "Returns user's rank in a specific leaderboard",
         parameters: [
           { name: 'userId', in: 'path', required: true, type: 'string' },
-          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'] },
+          { name: 'mode', in: 'query', required: true, type: 'string', enum: ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', 'fade_mode'] },
           { name: 'period', in: 'query', required: true, type: 'string', enum: ['daily', 'weekly', 'all_time'] }
         ],
         responses: { '200': { description: 'OK' }, '404': { description: 'User not found in leaderboard' } }

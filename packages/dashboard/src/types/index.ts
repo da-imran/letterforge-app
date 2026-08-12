@@ -1,5 +1,5 @@
-export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode' | 'daily_challenge';
-export type DuelMode = Exclude<GameMode, 'daily_challenge'>;
+export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode' | 'fade_mode' | 'daily_challenge';
+export type DuelMode = Exclude<GameMode, 'daily_challenge' | 'fade_mode'>;
 export type Period = 'daily' | 'weekly' | 'all_time';
 
 export interface DailyChallenge {
@@ -127,6 +127,7 @@ export interface UserStats {
   time_attack: ModeStats;
   survival_mode: ModeStats;
   chain_mode: ModeStats;
+  fade_mode: ModeStats;
 }
 
 export interface AuthResponse {

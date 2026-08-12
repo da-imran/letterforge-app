@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Loader2, User as UserIcon, Calendar, Star, Trophy, Gamepad2, Clock, Shield, Link as LinkIcon, Trash2, RefreshCw, ArrowRight } from 'lucide-react';
+import { Loader2, User as UserIcon, Calendar, Star, Trophy, Gamepad2, Clock, Shield, Link as LinkIcon, Eye, Trash2, RefreshCw, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +22,7 @@ export default function ProfilePage() {
   const [timedStats, setTimedStats] = useState<UserStats>({ totalScore: 0, gameCount: 0 });
   const [survivalStats, setSurvivalStats] = useState<UserStats>({ totalScore: 0, gameCount: 0 });
   const [chainStats, setChainStats] = useState<UserStats>({ totalScore: 0, gameCount: 0 });
+  const [fadeStats, setFadeStats] = useState<UserStats>({ totalScore: 0, gameCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function ProfilePage() {
       setTimedStats(stats.time_attack || { totalScore: 0, gameCount: 0 });
       setSurvivalStats(stats.survival_mode || { totalScore: 0, gameCount: 0 });
       setChainStats(stats.chain_mode || { totalScore: 0, gameCount: 0 });
+      setFadeStats(stats.fade_mode || { totalScore: 0, gameCount: 0 });
     } catch (err) {
       console.error(err);
     } finally {
@@ -97,8 +99,8 @@ export default function ProfilePage() {
     );
   }
 
-  const combinedScore = normalStats.totalScore + timedStats.totalScore + survivalStats.totalScore + chainStats.totalScore;
-  const combinedGames = normalStats.gameCount + timedStats.gameCount + survivalStats.gameCount + chainStats.gameCount;
+  const combinedScore = normalStats.totalScore + timedStats.totalScore + survivalStats.totalScore + chainStats.totalScore + fadeStats.totalScore;
+  const combinedGames = normalStats.gameCount + timedStats.gameCount + survivalStats.gameCount + chainStats.gameCount + fadeStats.gameCount;
 
   // Display name: use nickname if available, otherwise show email
   const displayName = user?.nickname || user?.email || 'Player';
@@ -171,7 +173,7 @@ export default function ProfilePage() {
           color="primary"
         />
         <StatCard
-          title="Survival Mode"
+          title="Endless Mode"
           icon={<Shield className="w-6 h-6 text-blue-500" />}
           score={survivalStats.totalScore}
           games={survivalStats.gameCount}
@@ -182,6 +184,13 @@ export default function ProfilePage() {
           icon={<LinkIcon className="w-6 h-6 text-green-500" />}
           score={chainStats.totalScore}
           games={chainStats.gameCount}
+          color="primary"
+        />
+        <StatCard
+          title="Fade Mode"
+          icon={<Eye className="w-6 h-6 text-rose-500" />}
+          score={fadeStats.totalScore}
+          games={fadeStats.gameCount}
           color="primary"
         />
       </div>
@@ -203,7 +212,7 @@ export default function ProfilePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Milestone active={combinedGames >= 1} label="First Forge" desc="Complete your first game" />
             <Milestone active={combinedScore >= 1000} label="Word Smith" desc="Earn 1,000 total points" />
-            <Milestone active={survivalStats.gameCount >= 5} label="Survivalist" desc="Complete 5 Survival games" />
+            <Milestone active={survivalStats.gameCount >= 5} label="Endless Player" desc="Complete 5 Endless games" />
             <Milestone active={chainStats.totalScore >= 500} label="Chain Breaker" desc="Earn 500 points in Chain mode" />
           </div>
         </CardContent>

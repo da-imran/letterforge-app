@@ -38,6 +38,14 @@ const MODE_CONFIG = {
 		batchSize: 10,
 		useBatch: true,
 	},
+	fade_mode: {
+		maxRounds: 10,
+		letterCount: 3,
+		lives: null,
+		expiresAt: null,
+		batchSize: 10,
+		useBatch: true,
+	},
 	daily_challenge: {
 		maxRounds: 5,
 		letterCount: 0,

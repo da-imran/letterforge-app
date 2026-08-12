@@ -225,7 +225,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_1',
     title: 'Novice Survivor',
-    description: 'Survive 5 rounds in Survival Mode',
+    description: 'Survive 5 rounds in Endless Mode',
     icon: '🔥',
     rarity: 'common',
     category: 'survival',
@@ -235,7 +235,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_5',
     title: 'Skilled Survivor',
-    description: 'Survive 15 rounds in Survival Mode',
+    description: 'Survive 15 rounds in Endless Mode',
     icon: '⚔️',
     rarity: 'common',
     category: 'survival',
@@ -245,7 +245,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_15',
     title: 'Seasoned Survivor',
-    description: 'Survive 30 rounds in Survival Mode',
+    description: 'Survive 30 rounds in Endless Mode',
     icon: '🛡️',
     rarity: 'rare',
     category: 'survival',
@@ -255,7 +255,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_30',
     title: 'Master Survivor',
-    description: 'Survive 50 rounds in Survival Mode',
+    description: 'Survive 50 rounds in Endless Mode',
     icon: '🏆',
     rarity: 'rare',
     category: 'survival',
@@ -265,7 +265,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_50',
     title: 'Elite Survivor',
-    description: 'Survive 75 rounds in Survival Mode',
+    description: 'Survive 75 rounds in Endless Mode',
     icon: '👑',
     rarity: 'epic',
     category: 'survival',
@@ -275,7 +275,7 @@ const MILESTONES_DATA = [
   {
     id: 'survivor_100',
     title: 'Legendary Survivor',
-    description: 'Survive 100 rounds in Survival Mode',
+    description: 'Survive 100 rounds in Endless Mode',
     icon: '💪',
     rarity: 'legendary',
     category: 'survival',
@@ -348,8 +348,8 @@ const MILESTONES_DATA = [
   // === SURVIVAL MODE - Game Count Tiers ===
   {
     id: 'survival_first',
-    title: 'Survival Initiate',
-    description: 'Complete your first Survival Mode game',
+    title: 'Endless Initiate',
+    description: 'Complete your first Endless Mode game',
     icon: '🕯️',
     rarity: 'common',
     category: 'survival',
@@ -358,8 +358,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_3_games',
-    title: 'Survival Explorer',
-    description: 'Complete 3 Survival Mode games',
+    title: 'Endless Explorer',
+    description: 'Complete 3 Endless Mode games',
     icon: '🏕️',
     rarity: 'common',
     category: 'survival',
@@ -368,8 +368,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_10_games',
-    title: 'Survival Veteran',
-    description: 'Complete 10 Survival Mode games',
+    title: 'Endless Veteran',
+    description: 'Complete 10 Endless Mode games',
     icon: '🔥',
     rarity: 'rare',
     category: 'survival',
@@ -378,8 +378,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_25_games',
-    title: 'Survival Champion',
-    description: 'Complete 25 Survival Mode games',
+    title: 'Endless Champion',
+    description: 'Complete 25 Endless Mode games',
     icon: '🛡️',
     rarity: 'epic',
     category: 'survival',
@@ -388,8 +388,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_50_games',
-    title: 'Survival Legend',
-    description: 'Complete 50 Survival Mode games',
+    title: 'Endless Legend',
+    description: 'Complete 50 Endless Mode games',
     icon: '👑',
     rarity: 'legendary',
     category: 'survival',
@@ -492,8 +492,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_only_master',
-    title: 'Survival Purist',
-    description: 'Complete 50 games in Survival Mode and fewer than 10 in any other mode',
+    title: 'Endless Purist',
+    description: 'Complete 50 games in Endless Mode and fewer than 10 in any other mode',
     icon: '🕯️',
     rarity: 'epic',
     category: 'special',
@@ -512,8 +512,8 @@ const MILESTONES_DATA = [
   },
   {
     id: 'survival_high_score',
-    title: 'Survival High Roller',
-    description: 'Score 500+ points in a single Survival Mode game',
+    title: 'Endless High Roller',
+    description: 'Score 500+ points in a single Endless Mode game',
     icon: '💰',
     rarity: 'epic',
     category: 'special',

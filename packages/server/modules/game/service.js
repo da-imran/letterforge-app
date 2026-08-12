@@ -102,7 +102,7 @@ class GameService {
             }
         }
 
-        const maxRounds = (mode === 'normal_mode' || mode === 'chain_mode' || mode === 'daily_challenge') ? modeConfig.maxRounds : null;
+        const maxRounds = (mode === 'normal_mode' || mode === 'chain_mode' || mode === 'fade_mode' || mode === 'daily_challenge') ? modeConfig.maxRounds : null;
 
         const game = {
             trace_id: crypto.randomUUID(),
@@ -540,6 +540,7 @@ class GameService {
             timedGames: 0,
             survivalGames: 0,
             chainGames: 0,
+            fadeGames: 0,
             totalPoints: 0,
             maxWordStreak: 0,
             avgPointsPerWord: 0,
@@ -561,6 +562,7 @@ class GameService {
             else if (g.mode === 'time_attack') stats.timedGames++;
             else if (g.mode === 'survival_mode') stats.survivalGames++;
             else if (g.mode === 'chain_mode') stats.chainGames++;
+            else if (g.mode === 'fade_mode') stats.fadeGames++;
 
             const gamePoints = g.score || 0;
             const gameWords = g.usedWords ? g.usedWords.length : 0;
@@ -631,6 +633,7 @@ class GameService {
             time_attack: byMode.time_attack || { totalScore: 0, gameCount: 0 },
             survival_mode: byMode.survival_mode || { totalScore: 0, gameCount: 0 },
             chain_mode: byMode.chain_mode || { totalScore: 0, gameCount: 0 },
+            fade_mode: byMode.fade_mode || { totalScore: 0, gameCount: 0 },
         };
     }
 

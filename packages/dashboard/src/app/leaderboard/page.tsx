@@ -14,7 +14,7 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Sun, Layers, Loader2, ArrowUpRight } from 'lucide-react';
+import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Sun, Eye, Layers, Loader2, ArrowUpRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function LeaderboardPage() {
@@ -54,7 +54,7 @@ export default function LeaderboardPage() {
         </div>
 
         <Tabs defaultValue="normal_mode" onValueChange={(v) => setMode(v as GameMode | 'all')} className="w-full md:w-auto">
-          <TabsList className="bg-card grid grid-cols-3 md:grid-cols-6 w-full md:min-w-[560px]">
+          <TabsList className="bg-card grid grid-cols-3 md:grid-cols-7 w-full md:min-w-[640px]">
             <TabsTrigger value="all" className="gap-2 text-xs md:text-sm">
               <Layers className="w-4 h-4" />
               All
@@ -69,11 +69,15 @@ export default function LeaderboardPage() {
             </TabsTrigger>
             <TabsTrigger value="survival_mode" className="gap-2 text-xs md:text-sm">
               <Shield className="w-4 h-4" />
-              Survival
+              Endless
             </TabsTrigger>
             <TabsTrigger value="chain_mode" className="gap-2 text-xs md:text-sm">
               <LinkIcon className="w-4 h-4" />
               Chain
+            </TabsTrigger>
+            <TabsTrigger value="fade_mode" className="gap-2 text-xs md:text-sm">
+              <Eye className="w-4 h-4" />
+              Fade
             </TabsTrigger>
             <TabsTrigger value="daily_challenge" className="gap-2 text-xs md:text-sm">
               <Sun className="w-4 h-4" />

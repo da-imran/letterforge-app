@@ -6,11 +6,13 @@ import { api } from '@/lib/api';
 import { useUser } from '@/context/UserContext';
 import { LetterTile } from './LetterTile';
 import { Timer } from './Timer';
+import { FadeTimer } from './FadeTimer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   Send,
   RotateCcw,
@@ -30,8 +32,9 @@ interface GameBoardProps {
 const MODE_LABELS: Record<string, string> = {
   normal_mode: 'Normal Mode',
   time_attack: 'Time Attack',
-  survival_mode: 'Survival Mode',
+  survival_mode: 'Endless Mode',
   chain_mode: 'Chain Mode',
+  fade_mode: 'Fade Mode',
   daily_challenge: 'Daily Challenge',
 };
 
@@ -45,11 +48,21 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
   const [lastFeedback, setLastFeedback] = useState<{ type: 'success' | 'duplicate' | 'error', points?: number, reason?: string } | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastResetAt, setLastResetAt] = useState(0);
+  const [fadeDone, setFadeDone] = useState(false);
   const gameRef = useRef<Game>(initialGame);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => { gameRef.current = game; }, [game]);
+
+  const isFadeMode = game.mode === 'fade_mode';
+  const fadeRestartKey = `${game.round ?? 0}-${lastResetAt}`;
+
+  // Fade Mode: each fresh set of letters is visible for 3 seconds, then fades.
+  // Reset the hidden state whenever a new set of letters appears (new round or reset).
+  useEffect(() => {
+    setFadeDone(false);
+  }, [isFadeMode, game.round, lastResetAt]);
 
   const modeLabel = MODE_LABELS[game.mode] ?? game.mode.replace('_', ' ');
 
@@ -98,7 +111,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
 
   // Refill the batch when nearing exhaustion (index reaches 8)
   const handleRefillIfNeeded = async () => {
-    if (game.mode !== 'normal_mode' && game.mode !== 'time_attack') return;
+    if (game.mode !== 'normal_mode' && game.mode !== 'time_attack' && game.mode !== 'fade_mode') return;
 
     const batchIndex = getLocalBatchIndex();
     if (batchIndex < 8) return; // Only refill when near end (index 8 = 9th set out of 10)
@@ -353,7 +366,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
             <Award className="w-10 h-10 text-amber-500" />
 
             {/* Batch refill indicator */}
-            {(game.mode === 'normal_mode' || game.mode === 'time_attack') && (
+            {(game.mode === 'normal_mode' || game.mode === 'time_attack' || game.mode === 'fade_mode') && (
               <div className="flex items-center gap-2 ml-2">
                 <span className="text-xs text-muted-foreground">Batch</span>
                 <span className="text-sm font-bold tabular-nums">{getLocalBatchIndex() + 1}/10</span>
@@ -378,17 +391,28 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
             <Timer expiresAt={game.expiresAt} onExpire={handleComplete} className="max-w-md" />
           )}
 
+          {game.mode === 'fade_mode' && !game.isCompleted && (
+            <FadeTimer restartKey={fadeRestartKey} onFadeComplete={() => setFadeDone(true)} className="max-w-md" />
+          )}
+
           {game.mode === 'daily_challenge' ? (
             <div className="w-full max-w-md text-center py-6">
               <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-3">Meaning of the day</p>
               <p className="text-2xl md:text-3xl font-black text-amber-500 leading-relaxed">{game.clue}</p>
             </div>
           ) : (
-            <div className="flex flex-wrap justify-center gap-4 sm:gap-6 py-6">
+            <div
+              key={isFadeMode ? `fade-${fadeRestartKey}` : 'static-letters'}
+              className={cn(
+                "flex flex-wrap justify-center gap-4 sm:gap-6 py-6",
+                isFadeMode && !game.isCompleted && (fadeDone ? "opacity-0 pointer-events-none" : "animate-fade-out")
+              )}
+            >
               {getDisplayLetters().map((letter, idx) => (
                 <LetterTile
                   key={`${letter}-${idx}-${game.round ?? 0}-${lastResetAt}`}
                   letter={letter}
+                  glow={isFadeMode && !fadeDone}
                   onClick={() => !game.isCompleted && handleLetterClick(letter)}
                   className={game.isCompleted ? "opacity-50 grayscale pointer-events-none" : ""}
                 />
@@ -482,7 +506,9 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
             <SparkleIcon className="w-4 h-4 text-primary" />
             {game.mode === 'daily_challenge'
               ? `Attempts: ${game.round} of ${game.maxRounds}`
-              : `Letters: ${game.letters.join(', ').toUpperCase()}`}
+              : game.mode === 'fade_mode'
+                ? `Memorize ${game.letterCount} letters`
+                : `Letters: ${game.letters.join(', ').toUpperCase()}`}
           </div>
           {!game.isCompleted && game.mode !== 'daily_challenge' && (
             <Button

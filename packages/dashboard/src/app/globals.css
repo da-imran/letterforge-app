@@ -70,3 +70,13 @@
 .letter-tile-flip.flipped {
   transform: rotateY(180deg);
 }
+
+/* Fade Mode: letters vanish over 3s once shown */
+@keyframes fade-out {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-out {
+  animation: fade-out 3s linear forwards;
+}

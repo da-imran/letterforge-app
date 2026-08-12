@@ -20,6 +20,7 @@ const MODE_XP_MULTIPLIER = {
     time_attack: 1.5,
     survival_mode: 2,
     chain_mode: 1.5,
+    fade_mode: 1.5,
     daily_challenge: 1.25,
 };
 

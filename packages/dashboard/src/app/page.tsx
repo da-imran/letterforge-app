@@ -20,7 +20,8 @@ import {
   Swords,
   ArrowRight,
   Flame,
-  Target
+  Target,
+  Eye
 } from 'lucide-react';
 
 export default function Home() {
@@ -48,13 +49,13 @@ export default function Home() {
   const displayName = user?.nickname || user?.email || 'Player';
 
   const totalScore = stats
-    ? (stats.normal_mode?.totalScore ?? 0) + (stats.time_attack?.totalScore ?? 0) + (stats.survival_mode?.totalScore ?? 0) + (stats.chain_mode?.totalScore ?? 0)
+    ? (stats.normal_mode?.totalScore ?? 0) + (stats.time_attack?.totalScore ?? 0) + (stats.survival_mode?.totalScore ?? 0) + (stats.chain_mode?.totalScore ?? 0) + (stats.fade_mode?.totalScore ?? 0)
     : 0;
   const totalGames = stats
-    ? (stats.normal_mode?.gameCount ?? 0) + (stats.time_attack?.gameCount ?? 0) + (stats.survival_mode?.gameCount ?? 0) + (stats.chain_mode?.gameCount ?? 0)
+    ? (stats.normal_mode?.gameCount ?? 0) + (stats.time_attack?.gameCount ?? 0) + (stats.survival_mode?.gameCount ?? 0) + (stats.chain_mode?.gameCount ?? 0) + (stats.fade_mode?.gameCount ?? 0)
     : 0;
   const activeModes = stats
-    ? [stats.normal_mode, stats.time_attack, stats.survival_mode, stats.chain_mode].filter(s => s && s.gameCount > 0).length
+    ? [stats.normal_mode, stats.time_attack, stats.survival_mode, stats.chain_mode, stats.fade_mode].filter(s => s && s.gameCount > 0).length
     : 0;
 
   return (
@@ -100,7 +101,7 @@ export default function Home() {
                 <StatPill
                   icon={<Target className="w-5 h-5 text-emerald-400" />}
                   label="Modes Conquered"
-                  value={`${activeModes}/4`}
+                  value={`${activeModes}/5`}
                 />
               </div>
               {dailyChallenge && (
@@ -140,7 +141,7 @@ export default function Home() {
                   }}
                 />
                 <ModeCard
-                  title="Survival Mode"
+                  title="Endless Mode"
                   desc="Endless rounds. Keep forging until you can't find words."
                   mode="survival_mode"
                   icon={<Shield className="w-7 h-7" />}
@@ -167,6 +168,21 @@ export default function Home() {
                     shadow: "hover:shadow-emerald-500/20",
                     glow: "from-emerald-500/20",
                     tag: "bg-emerald-500 text-white"
+                  }}
+                />
+                <ModeCard
+                  title="Fade Mode"
+                  desc="10x rounds. Memorize the letters before they fade away."
+                  mode="fade_mode"
+                  icon={<Eye className="w-7 h-7" />}
+                  accent={{
+                    text: "text-rose-400",
+                    bg: "bg-rose-500/10",
+                    border: "border-rose-500/25",
+                    hoverBorder: "hover:border-rose-400/60",
+                    shadow: "hover:shadow-rose-500/20",
+                    glow: "from-rose-500/20",
+                    tag: "bg-rose-500 text-white"
                   }}
                 />
                 <ModeCard

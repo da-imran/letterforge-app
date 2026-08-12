@@ -195,7 +195,7 @@
           "games"
         ],
         "summary": "Create a new game",
-        "description": "Creates a new game with specified mode (normal_mode, time_attack, survival_mode, or chain_mode)",
+        "description": "Creates a new game with specified mode (normal_mode, time_attack, survival_mode, chain_mode, or fade_mode)",
         "parameters": [
           {
             "name": "body",
@@ -209,7 +209,8 @@
                     "normal_mode",
                     "time_attack",
                     "survival_mode",
-                    "chain_mode"
+                    "chain_mode",
+                    "fade_mode"
                   ],
                   "description": "Game mode"
                 },
@@ -706,7 +707,8 @@
                     "normal_mode",
                     "time_attack",
                     "survival_mode",
-                    "chain_mode"
+                    "chain_mode",
+                    "fade_mode"
                   ]
                 },
                 "points": {
@@ -799,7 +801,8 @@
               "normal_mode",
               "time_attack",
               "survival_mode",
-              "chain_mode"
+              "chain_mode",
+              "fade_mode"
             ]
           },
           {
@@ -841,7 +844,8 @@
               "normal_mode",
               "time_attack",
               "survival_mode",
-              "chain_mode"
+              "chain_mode",
+              "fade_mode"
             ]
           },
           {
@@ -906,7 +910,8 @@
                     "normal_mode",
                     "time_attack",
                     "survival_mode",
-                    "chain_mode"
+                    "chain_mode",
+                    "fade_mode"
                   ]
                 },
                 "period": {
@@ -963,7 +968,8 @@
               "normal_mode",
               "time_attack",
               "survival_mode",
-              "chain_mode"
+              "chain_mode",
+              "fade_mode"
             ]
           },
           {
