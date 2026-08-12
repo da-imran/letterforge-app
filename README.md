@@ -65,11 +65,12 @@ letterforge-app/
 │     ├─ .env.example
 │     ├─ next.config.js
 │     ├─ tsconfig.json
+│     ├─ Dockerfile           # Multi-stage Next.js build for dashboard
 │     └─ package.json
 │
 ├─ lib/                        # Reserved for shared packages (types, utils)
 ├─ tsconfig.base.json         # Shared TypeScript configuration
-├─ docker-compose.yaml        # 4 services: server, worker, rabbitmq, mongodb
+├─ docker-compose.yaml        # 5 services: server, worker, dashboard, rabbitmq, mongodb
 ├─ Dockerfile                 # Multi-stage build for server
 ├─ run-local.sh              # Development launcher script
 ├─ package.json              # Root workspace configuration
@@ -204,7 +205,7 @@ The launcher starts:
 ### Run with Docker Compose
 
 ```bash
-# Start all services (server, worker, rabbitmq, mongodb)
+# Start all services (server, worker, dashboard, rabbitmq, mongodb)
 docker compose up -d --build
 
 # View logs
@@ -750,6 +751,12 @@ docker run -d \
   -e RABBITMQ_URI=amqp://rabbitmq \
   -p 8888:8888 \
   letterforge-server:latest
+
+# Build the dashboard image
+docker build -t letterforge-dashboard:latest -f packages/dashboard/Dockerfile .
+
+# Run the container
+docker run -d -p 9002:9002 letterforge-dashboard:latest
 ```
 
 ### Production Checklist

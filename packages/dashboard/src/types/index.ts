@@ -106,6 +106,7 @@ export interface LeaderboardEntry {
   totalScore: number;
   gameCount: number;
   lastPlayedAt: string;
+  allScore: number;
 }
 
 export interface UserRank {

@@ -5,6 +5,9 @@ const { MODES, PERIODS } = require('../../utilities/constant');
 const MAX_LIMIT = 100;
 const DEFAULT_LIMIT = 10;
 
+// 'all' is a pseudo-mode that aggregates across every game mode.
+const isValidMode = (mode) => mode === 'all' || MODES.includes(mode);
+
 function parsePagination(limit, offset) {
     const parsedLimit = Number.parseInt(limit, 10);
     const parsedOffset = Number.parseInt(offset, 10);
@@ -26,7 +29,7 @@ module.exports = (leaderboardService) => {
                 return res.status(400).json({ status: 400, message: 'mode and period are required' });
             }
 
-            if (!MODES.includes(mode)) {
+            if (!isValidMode(mode)) {
                 return res.status(400).json({ status: 400, message: 'Invalid mode' });
             }
 

@@ -92,13 +92,17 @@ class LeaderboardService {
     async _getLeaderboard({ mode, period, limit = 10, offset = 0 }) {
         const { startDate, endDate } = this._getPeriodDateRange(period);
 
+        // 'all' aggregates across every mode; other modes narrow the match.
         const matchStage = {
-            mode,
             createdAt: { $gte: startDate }
         };
 
         if (endDate) {
             matchStage.createdAt.$lte = endDate;
+        }
+
+        if (mode !== 'all') {
+            matchStage.mode = mode;
         }
 
         const pipeline = [
@@ -140,7 +144,52 @@ class LeaderboardService {
             }
         ];
 
-        return mongo.aggregate(this.client, this.collection, pipeline);
+        const rows = await mongo.aggregate(this.client, this.collection, pipeline);
+
+        if (rows.length === 0) {
+            return rows;
+        }
+
+        // For 'all', totalScore already spans every mode — mirror it.
+        if (mode === 'all') {
+            return rows.map((row) => ({ ...row, allScore: row.totalScore }));
+        }
+
+        const userIds = rows.map((row) => mongo.getObjectId(row.userId));
+        const allScores = await this._getAllModeScores(userIds, startDate, endDate);
+
+        return rows.map((row) => ({
+            ...row,
+            allScore: allScores[row.userId.toString()] || 0,
+        }));
+    }
+
+    /**
+     * Sum a user's points across every mode within a period. Used to show
+     * a cumulative (normal + time attack + survival + chain + daily) score
+     * alongside the per-mode leaderboard.
+     * @private
+     */
+    async _getAllModeScores(userIds, startDate, endDate) {
+        const match = {
+            userId: { $in: userIds },
+            createdAt: { $gte: startDate }
+        };
+
+        if (endDate) {
+            match.createdAt.$lte = endDate;
+        }
+
+        const rows = await mongo.aggregate(this.client, this.collection, [
+            { $match: match },
+            { $group: { _id: '$userId', allScore: { $sum: '$points' } } }
+        ]);
+
+        const scores = {};
+        for (const row of rows) {
+            scores[row._id.toString()] = row.allScore;
+        }
+        return scores;
     }
 
     /**
@@ -172,16 +221,19 @@ class LeaderboardService {
      * Get user's rank in a specific leaderboard (computed from scores)
      */
     async getUserRank(userId, mode, period) {
-        if (!MODES.includes(mode)) throw new HttpError(400, 'Invalid mode');
+        if (mode !== 'all' && !MODES.includes(mode)) throw new HttpError(400, 'Invalid mode');
         if (!PERIODS.includes(period)) throw new HttpError(400, 'Invalid period');
 
         const objectId = mongo.getObjectId(userId);
         if (!objectId) throw new HttpError(400, 'Invalid userId');
 
         const { startDate, endDate } = this._getPeriodDateRange(period);
-        const match = { mode, createdAt: { $gte: startDate } };
+        const match = { createdAt: { $gte: startDate } };
         if (endDate) {
             match.createdAt.$lte = endDate;
+        }
+        if (mode !== 'all') {
+            match.mode = mode;
         }
 
         const userRows = await mongo.aggregate(this.client, this.collection, [

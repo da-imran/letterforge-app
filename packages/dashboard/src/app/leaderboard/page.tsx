@@ -14,11 +14,11 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Sun, Loader2, ArrowUpRight } from 'lucide-react';
+import { Trophy, Medal, Star, Clock, Gamepad2, Shield, Link as LinkIcon, Sun, Layers, Loader2, ArrowUpRight } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function LeaderboardPage() {
-  const [mode, setMode] = useState<GameMode>('normal_mode');
+  const [mode, setMode] = useState<GameMode | 'all'>('normal_mode');
   const [period, setPeriod] = useState<Period>('all_time');
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,8 +53,12 @@ export default function LeaderboardPage() {
           <p className="text-muted-foreground text-lg">See who forged the most powerful words in LetterForge history.</p>
         </div>
 
-        <Tabs defaultValue="normal_mode" onValueChange={(v) => setMode(v as GameMode)} className="w-full md:w-auto">
-          <TabsList className="bg-card grid grid-cols-3 md:grid-cols-5 w-full md:min-w-[480px]">
+        <Tabs defaultValue="normal_mode" onValueChange={(v) => setMode(v as GameMode | 'all')} className="w-full md:w-auto">
+          <TabsList className="bg-card grid grid-cols-3 md:grid-cols-6 w-full md:min-w-[560px]">
+            <TabsTrigger value="all" className="gap-2 text-xs md:text-sm">
+              <Layers className="w-4 h-4" />
+              All
+            </TabsTrigger>
             <TabsTrigger value="normal_mode" className="gap-2 text-xs md:text-sm">
               <Gamepad2 className="w-4 h-4" />
               Normal
@@ -116,6 +120,7 @@ export default function LeaderboardPage() {
                   <TableHead className="w-[100px] text-center">Rank</TableHead>
                   <TableHead>Nickname</TableHead>
                   <TableHead className="text-right">Total Score</TableHead>
+                  {mode !== 'all' && <TableHead className="text-right hidden sm:table-cell">All Modes</TableHead>}
                   <TableHead className="text-right hidden sm:table-cell">Games</TableHead>
                   <TableHead className="text-right hidden md:table-cell">Last Active</TableHead>
                 </TableRow>
@@ -142,6 +147,13 @@ export default function LeaderboardPage() {
                         {entry.totalScore.toLocaleString()}
                       </span>
                     </TableCell>
+                    {mode !== 'all' && (
+                      <TableCell className="text-right hidden sm:table-cell">
+                        <span className="font-bold text-muted-foreground tabular-nums">
+                          {entry.allScore.toLocaleString()}
+                        </span>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right hidden sm:table-cell">
                       <Badge variant="secondary" className="font-bold">
                         {entry.gameCount}

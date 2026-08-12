@@ -27,7 +27,7 @@ services:
       rabbitmq:
         condition: service_healthy
     restart: on-failure
-    command: ["npm", "start"]
+    command: ["node", "packages/server/app.js"]
 
   worker:
     build:
@@ -50,12 +50,51 @@ services:
     restart: on-failure
     command: ["node", "packages/server/worker.js"]
 
+  sync-achievements:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: letter-forge-sync-achievements
+    environment:
+      NODE_ENV: dev
+      MONGODB_DBNAME: ${MONGODB_DBNAME:-data}
+      MONGO_URI: mongodb://mongodb:27017/${MONGODB_DBNAME:-data}
+    networks:
+      - letter-forge-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: on-failure
+    command: ["node", "packages/server/jobs/syncAchievements.js"]
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: packages/dashboard/Dockerfile
+    container_name: letter-forge-dashboard
+    environment:
+      NODE_ENV: production
+    ports:
+      - "9002:9002"
+    networks:
+      - letter-forge-network
+    depends_on:
+      - server
+    restart: on-failure
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9002"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: letter-forge-rabbitmq
     restart: unless-stopped
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -91,4 +130,5 @@ networks:
 
 volumes:
   db_data:
+    name: server_db_data
   rabbitmq_data:

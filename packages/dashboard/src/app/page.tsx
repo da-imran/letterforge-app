@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useUser } from '@/context/UserContext';
 import { UserAuth } from '@/components/UserAuth';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { DailyChallenge, UserStats } from '@/types';
 import {
@@ -15,7 +17,6 @@ import {
   BookCheck,
   Shield,
   Link as LinkIcon,
-  Sun,
   Swords,
   ArrowRight,
   Flame,
@@ -102,6 +103,11 @@ export default function Home() {
                   value={`${activeModes}/4`}
                 />
               </div>
+              {dailyChallenge && (
+                <div className="w-full max-w-6xl">
+                  <DailyChallengeHero dailyChallenge={dailyChallenge} />
+                </div>
+              )}
               <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 max-w-6xl">
                 <ModeCard
                   title="Normal Mode"
@@ -161,21 +167,6 @@ export default function Home() {
                     shadow: "hover:shadow-emerald-500/20",
                     glow: "from-emerald-500/20",
                     tag: "bg-emerald-500 text-white"
-                  }}
-                />
-                <ModeCard
-                  title="Daily Challenge"
-                  desc="One shared puzzle a day. Solve meaning of the day to score."
-                  mode="daily_challenge"
-                  icon={<Sun className="w-7 h-7" />}
-                  accent={{
-                    text: "text-amber-400",
-                    bg: "bg-amber-500/10",
-                    border: "border-amber-500/25",
-                    hoverBorder: "hover:border-amber-400/60",
-                    shadow: "hover:shadow-amber-500/20",
-                    glow: "from-amber-500/20",
-                    tag: "bg-amber-500 text-black"
                   }}
                 />
                 <ModeCard
@@ -265,6 +256,69 @@ function ModeCard({ title, desc, mode, icon, href, clue, accent }: { title: stri
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function DailyChallengeHero({ dailyChallenge }: { dailyChallenge: DailyChallenge }) {
+  const [timeLeft, setTimeLeft] = useState('--:--:--');
+
+  // Count down to local midnight — the challenge resets when the date key rolls over.
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      const diff = Math.max(0, midnight.getTime() - now.getTime());
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      const s = Math.floor((diff % 60_000) / 1000);
+      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <Card className="relative overflow-hidden border-2 border-amber-500/50 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-background/60 backdrop-blur-sm text-center transition-all duration-300 hover:border-amber-400/70 hover:shadow-2xl hover:shadow-amber-500/20">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-amber-500/15 to-transparent opacity-60" />
+      <CardContent className="relative z-10 flex flex-col items-center justify-center h-full p-6 md:p-8 text-center space-y-4">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
+          <Badge className="gap-1 bg-amber-500/15 text-amber-600 border-amber-500/30">
+            <Flame className="w-3.5 h-3.5" />
+            Limited time
+          </Badge>
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground tabular-nums">
+            {new Date(`${dailyChallenge.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+          </span>
+        </div>
+        <h2 className="font-headline text-2xl md:text-3xl font-black tracking-tight">Today's Challenge</h2>
+        <div className="max-w-xl border border-amber-500/30 bg-amber-500/5 rounded-lg p-4">
+          <p className="mb-1 text-[11px] font-black uppercase tracking-widest text-muted-foreground">Meaning of the day</p>
+          <p className="text-base md:text-lg font-bold text-amber-500">{dailyChallenge.clue}</p>
+        </div>
+        <div className="grid w-full max-w-md grid-cols-2 gap-3">
+          <HeroStat label="Time left" value={timeLeft} highlight />
+          <HeroStat label="Attempt Allowed" value={String(dailyChallenge.attempts)} />
+        </div>
+        <div className="w-full pt-2">
+          <Button asChild size="lg" className="group w-full bg-amber-500 text-black hover:bg-amber-400 h-12 font-black text-base">
+            <Link href="/play?mode=daily_challenge">
+              Play Daily Challenge
+              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeroStat({ label, value, highlight }: { label: string, value: string, highlight?: boolean }) {
+  return (
+    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-center">
+      <p className="mb-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className={`text-base md:text-lg font-black tabular-nums ${highlight ? 'text-amber-500' : ''}`}>{value}</p>
+    </div>
   );
 }
 

@@ -20,7 +20,10 @@
     "test": "mocha \"**/test/*-test.js\"",
     "start": "node app.js",
     "start:worker": "node worker.js",
+    "start:sync-achievements": "node jobs/syncAchievements.js",
+    "sync:achievements": "node jobs/syncAchievements.js --once",
     "dev:worker": "nodemon --watch '**/*.js' --ignore 'test/**' worker.js",
+    "dev:sync-achievements": "nodemon --watch '**/*.js' --ignore 'test/**' jobs/syncAchievements.js",
     "dev": "nodemon --watch '**/*.js' --ignore 'test/**' --exec \"npm run swagger && node app.js\"",
     "lint": "eslint ."
   },

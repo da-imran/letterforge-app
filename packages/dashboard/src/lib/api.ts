@@ -250,7 +250,7 @@ export const api = {
   },
 
   // Leaderboards API
-  getLeaderboard: async (mode: GameMode, period: Period, limit: number = 10, offset: number = 0): Promise<LeaderboardEntry[]> => {
+  getLeaderboard: async (mode: GameMode | 'all', period: Period, limit: number = 10, offset: number = 0): Promise<LeaderboardEntry[]> => {
     return fetchJson<LeaderboardEntry[]>(`/leaderboard?mode=${mode}&period=${period}&limit=${limit}&offset=${offset}`);
   },
 

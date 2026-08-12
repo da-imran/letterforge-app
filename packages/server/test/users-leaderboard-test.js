@@ -171,6 +171,7 @@ describe('Leaderboards (via Scores Collection)', () => {
         expect(filteredLeaderboard).to.have.lengthOf(3);
         expect(filteredLeaderboard[0].nickname).to.equal('topplayer2');
         expect(filteredLeaderboard[0].totalScore).to.equal(200);
+        expect(filteredLeaderboard[0].allScore).to.equal(200);
         expect(filteredLeaderboard[1].nickname).to.equal('midplayer2');
         expect(filteredLeaderboard[2].nickname).to.equal('lowplayer2');
     });
