@@ -62,6 +62,7 @@ class GameService {
         // already created today.
         let dailyAnswer = null;
         let clue = null;
+        let dailyMeanings = null;
         if (mode === 'daily_challenge') {
             if (userId) {
                 const startOfDay = new Date(now).setHours(0, 0, 0, 0);
@@ -77,6 +78,7 @@ class GameService {
             const challenge = getTodayChallenge();
             dailyAnswer = challenge.word;
             clue = challenge.clue;
+            dailyMeanings = challenge.meanings;
         }
 
         // Letter count (daily challenge uses no letters — the clue is the puzzle)
@@ -129,6 +131,7 @@ class GameService {
             // Daily challenge fields
             dailyAnswer,
             clue,
+            dailyMeanings,
         };
 
         const result = await mongo.insertOne(this.client, this.collection, game);

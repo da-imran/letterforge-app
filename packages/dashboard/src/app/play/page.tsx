@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { useUser } from '@/context/UserContext';
 import { GameBoard } from '@/components/GameBoard';
 import { DuelBoard } from '@/components/DuelBoard';
+import { WawasanBoard } from '@/components/WawasanBoard';
 import { Loader2, AlertCircle, User as UserIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,8 @@ function PlayPageContent() {
   const { user, isAuthenticated, isLoading: userLoading, refreshUser } = useUser();
   const [game, setGame] = useState<Game | null>(null);
   const [duelId, setDuelId] = useState<string | null>(null);
+  // Wawasan 2020 duels share one paper sheet — no per-player game is dealt.
+  const [wawasanDuelId, setWawasanDuelId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNicknameDialog, setShowNicknameDialog] = useState(false);
@@ -59,6 +62,10 @@ function PlayPageContent() {
           // Both players only get their games once the host starts the duel.
           if (duel.status !== 'playing') {
             setError('This duel has not started yet. The host needs to pick a mode and start it.');
+            return;
+          }
+          if (duel.mode === 'wawasan_mode') {
+            setWawasanDuelId(duelIdParam);
             return;
           }
           const myGameId = duel.myGameId;
@@ -102,7 +109,9 @@ function PlayPageContent() {
         // Initialize game after setting nickname
         if (duelIdParam) {
           const duel = await api.getDuel(duelIdParam);
-          if (duel.status === 'playing' && duel.myGameId) {
+          if (duel.status === 'playing' && duel.mode === 'wawasan_mode') {
+            setWawasanDuelId(duelIdParam);
+          } else if (duel.status === 'playing' && duel.myGameId) {
             const duelGame = await api.loadGame(duel.myGameId);
             setDuelId(duelIdParam);
             setGame(duelGame);
@@ -153,7 +162,11 @@ function PlayPageContent() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {game && (duelId ? <DuelBoard initialGame={game} duelId={duelId} /> : <GameBoard initialGame={game} />)}
+      {wawasanDuelId ? (
+        <WawasanBoard duelId={wawasanDuelId} />
+      ) : (
+        game && (duelId ? <DuelBoard initialGame={game} duelId={duelId} /> : <GameBoard initialGame={game} />)
+      )}
 
       {/* Nickname Dialog for first-time players */}
       <Dialog open={showNicknameDialog} onOpenChange={(open) => {

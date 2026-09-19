@@ -49,6 +49,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [lastResetAt, setLastResetAt] = useState(0);
   const [fadeDone, setFadeDone] = useState(false);
+  const [dailyMeaningIdx, setDailyMeaningIdx] = useState(0);
   const gameRef = useRef<Game>(initialGame);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -396,10 +397,28 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
           )}
 
           {game.mode === 'daily_challenge' ? (
-            <div className="w-full max-w-md text-center py-6">
-              <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-3">Meaning of the day</p>
-              <p className="text-2xl md:text-3xl font-black text-amber-500 leading-relaxed">{game.clue}</p>
-            </div>
+            (() => {
+              const meanings: string[] = (game.dailyMeanings && game.dailyMeanings.length > 0)
+                ? game.dailyMeanings
+                : game.clue ? [game.clue] : [];
+              const idx = Math.min(dailyMeaningIdx, Math.max(0, meanings.length - 1));
+              const current = meanings[idx] ?? '—';
+              return (
+                <div className="w-full max-w-md text-center py-6 space-y-3">
+                  <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Meaning of the day</p>
+                  {meanings.length > 1 && (
+                    <p className="text-xs text-muted-foreground">{idx + 1} of {meanings.length} meanings</p>
+                  )}
+                  <p className="text-2xl md:text-3xl font-black text-amber-500 leading-relaxed">{current}</p>
+                  {meanings.length > 1 && (
+                    <div className="flex justify-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setDailyMeaningIdx((i) => (i - 1 + meanings.length) % meanings.length)} className="gap-1">‹ Prev</Button>
+                      <Button variant="outline" size="sm" onClick={() => setDailyMeaningIdx((i) => (i + 1) % meanings.length)} className="gap-1">Next ›</Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : (
             <div
               key={isFadeMode ? `fade-${fadeRestartKey}` : 'static-letters'}
@@ -473,18 +492,42 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
           {game.isCompleted && (
             <div className="text-center space-y-4 py-4">
               <h2 className="text-3xl font-black text-primary">
-                {game.mode === 'daily_challenge' ? 'Challenge Submitted!' : 'Forge Finished!'}
+                {game.mode === 'daily_challenge'
+                  ? (game.score > 0 ? 'Challenge Solved!' : 'Challenge Over')
+                  : 'Forge Finished!'}
               </h2>
 
                {game.mode === 'daily_challenge' ? (
-                 <div className="space-y-2 max-w-md mx-auto">
-                   <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Your Score</p>
-                   <p className="text-5xl font-black text-amber-500 tabular-nums">{game.score}</p>
-                   <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                     <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-1">Today's Answer</p>
-                     <p className="text-3xl font-black text-amber-500 uppercase tracking-widest">{game.dailyAnswer || '—'}</p>
-                   </div>
-                 </div>
+                  (() => {
+                    const meanings: string[] = (game.dailyMeanings && game.dailyMeanings.length > 0)
+                      ? game.dailyMeanings
+                      : game.clue ? [game.clue] : [];
+                    return (
+                      <div className="space-y-3 max-w-md mx-auto">
+                        <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest">Your Score</p>
+                        <p className="text-5xl font-black text-amber-500 tabular-nums">{game.score}</p>
+                        <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+                          <div>
+                            <p className="text-sm text-muted-foreground font-bold uppercase tracking-widest mb-1">Today's Answer</p>
+                            <p className="text-3xl font-black text-amber-500 uppercase tracking-widest">{game.dailyAnswer || '—'}</p>
+                          </div>
+                          {meanings.length > 0 && (
+                            <div className="border-t border-amber-500/10 pt-3">
+                              <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mb-1">All Meanings ({meanings.length})</p>
+                              <ul className="text-left space-y-1 text-sm text-amber-700 dark:text-amber-300">
+                                {meanings.map((m, i) => (
+                                  <li key={i} className="flex gap-2"><span className="font-bold">{i + 1}.</span><span>{m}</span></li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {game.submissions.length > 0 && (
+                            <p className="text-xs text-muted-foreground">Your tries: {game.usedWords.join(', ')}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()
 ) : (
                   <div className="flex flex-col items-center gap-4">
                     <div className="flex justify-center gap-4">
@@ -505,7 +548,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({ initialGame }) => {
           <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
             <SparkleIcon className="w-4 h-4 text-primary" />
             {game.mode === 'daily_challenge'
-              ? `Attempts: ${game.round} of ${game.maxRounds}`
+              ? `Attempts: ${Math.min(game.round, game.maxRounds ?? 5)} of ${game.maxRounds}`
               : game.mode === 'fade_mode'
                 ? `Memorize ${game.letterCount} letters`
                 : `Letters: ${game.letters.join(', ').toUpperCase()}`}

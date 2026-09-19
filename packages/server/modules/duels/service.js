@@ -19,6 +19,33 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // Codes are user-typed, so we accept any 4-8 uppercase letters or digits.
 const CODE_PATTERN = /^[A-Z0-9]{4,8}$/;
 
+// Wawasan 2020 — classic A-Z category duel played on a shared paper sheet.
+// The owner defines 3-10 custom columns; A-Z is shuffled once and rounds
+// iterate through that order. 100 points are split across the columns as
+// whole numbers only (Math.round(100 / columnCount)).
+const WAWASAN_MODE = 'wawasan_mode';
+const WAWASAN_MIN_COLUMNS = 3;
+const WAWASAN_MAX_COLUMNS = 10;
+const WAWASAN_MAX_ROUNDS = 26;
+const WAWASAN_TOTAL_POINTS = 100;
+const WAWASAN_MAX_COLUMN_NAME = 30;
+const WAWASAN_MAX_ANSWER = 50;
+
+function shuffledAlphabet() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    for (let i = letters.length - 1; i > 0; i--) {
+        const j = crypto.randomInt(i + 1);
+        [letters[i], letters[j]] = [letters[j], letters[i]];
+    }
+    return letters;
+}
+
+function normalizeAnswer(value) {
+    // Trim, lowercase, and collapse all whitespace runs so multi-word
+    // answers ("teh o ais" vs "teh  o  ais") compare as the same words.
+    return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function generateCode(length = 6) {
     let code = '';
     for (let i = 0; i < length; i++) {
@@ -94,6 +121,7 @@ class DuelService extends EventEmitter {
                 winnerId: duel.winnerId,
                 result: duel.result,
                 startedAt: duel.startedAt,
+                wawasan: duel.wawasan || null,
                 updatedAt: duel.updatedAt,
             } }
         );
@@ -305,6 +333,58 @@ class DuelService extends EventEmitter {
                 forfeited: Boolean(duel.opponent?.forfeited),
             },
             myGameId,
+            wawasan: this._toPublicWawasan(duel, actorId),
+        };
+    }
+
+    /**
+     * Public Wawasan 2020 sheet. Completed rows are fully visible to both
+     * players; for the currently open row each player only sees their own
+     * answers (plus whether the opponent has submitted) until both sides
+     * have submitted — no peeking at the opponent's sheet mid-row.
+     */
+    _toPublicWawasan(duel, actorId) {
+        if (!duel.wawasan) return null;
+        const w = duel.wawasan;
+
+        const actorSlot =
+            (actorId && duel.challenger?.userId?.toString() === actorId && 'challenger') ||
+            (actorId && duel.opponent?.userId?.toString() === actorId && 'opponent') ||
+            null;
+        const otherSlot = actorSlot === 'challenger' ? 'opponent'
+            : actorSlot === 'opponent' ? 'challenger' : null;
+
+        const rounds = (w.rounds || []).map((round, index) => {
+            const isOpenRow = index === w.currentRound && round.status === 'open';
+            const bothSubmitted = Boolean(round.submitted?.challenger && round.submitted?.opponent);
+            const isReviewRow = index === w.currentRound && round.status === 'review';
+            const masked = isOpenRow && !bothSubmitted && otherSlot;
+            // In review phase, show all answers to both players (no masking)
+            const showOpponent = isReviewRow || bothSubmitted || round.status === 'done';
+            return {
+                letter: round.letter,
+                status: round.status,
+                submitted: { ...round.submitted },
+                confirmed: { ...round.confirmed },
+                challenges: { ...round.challenges },
+                answers: {
+                    challenger: masked && otherSlot === 'challenger'
+                        ? round.answers.challenger.map(() => null)
+                        : [...round.answers.challenger],
+                    opponent: (masked && otherSlot === 'opponent') || !showOpponent
+                        ? round.answers.opponent.map(() => null)
+                        : [...round.answers.opponent],
+                },
+            };
+        });
+
+        return {
+            columns: [...w.columns],
+            letters: [...w.letters],
+            currentRound: w.currentRound,
+            pointsPerColumn: w.pointsPerColumn,
+            rounds,
+            stoppedAt: w.stoppedAt || null,
         };
     }
 
@@ -347,6 +427,8 @@ class DuelService extends EventEmitter {
             opponent: emptyParticipant(opponentId),
             winnerId: null,
             result: null,
+            // Wawasan 2020 sheet state (null until a wawasan duel starts).
+            wawasan: null,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
@@ -382,8 +464,12 @@ class DuelService extends EventEmitter {
      * Start the duel for both players at once. Only the challenger (admin) can
      * start, and they must pick a mode first. Both participants' games are
      * created in the same call, so neither player can begin before the other.
+     *
+     * Wawasan 2020 (`wawasan_mode`) is duel-only: instead of letter-rack
+     * games it opens a shared A-Z paper sheet. The owner passes `columns`
+     * (3-10 custom names) via `options`.
      */
-    async startDuel(duelId, userId, mode) {
+    async startDuel(duelId, userId, mode, options = {}) {
         const duel = await this._load(duelId);
 
         if (this._slotForUser(duel, userId) !== 'challenger') {
@@ -399,12 +485,34 @@ class DuelService extends EventEmitter {
             return this._toPublic(duel, userId);
         }
 
-        const allowedModes = ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode'];
+        const allowedModes = ['normal_mode', 'time_attack', 'survival_mode', 'chain_mode', WAWASAN_MODE];
         if (!mode || !allowedModes.includes(mode)) {
             throw new HttpError(400, 'Select a game mode before starting the duel');
         }
 
         duel.mode = mode;
+
+        // Wawasan 2020 needs no letter-rack games — open the paper sheet.
+        if (mode === WAWASAN_MODE) {
+            const columns = this._validateWawasanColumns(options.columns);
+            const letters = shuffledAlphabet();
+            duel.maxRounds = WAWASAN_MAX_ROUNDS;
+            duel.wawasan = {
+                columns,
+                letters,
+                currentRound: 0,
+                pointsPerColumn: Math.round(WAWASAN_TOTAL_POINTS / columns.length),
+                rounds: [this._openWawasanRound(letters[0], columns.length)],
+                stoppedAt: null,
+            };
+            duel.challenger.score = 0;
+            duel.opponent.score = 0;
+            duel.status = 'playing';
+            duel.startedAt = new Date();
+            await this._save(duel);
+            return this._toPublic(duel, userId);
+        }
+
         duel.maxRounds = (mode === 'time_attack' || mode === 'survival_mode') ? null : DUEL_MAX_ROUNDS;
 
         // Deal to BOTH players in the same request so they start together.
@@ -421,6 +529,308 @@ class DuelService extends EventEmitter {
         duel.startedAt = new Date();
         await this._save(duel);
         return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Validate the owner-defined Wawasan columns: 3-10 unique, non-empty
+     * names (max 30 chars each). Returns the cleaned names.
+     */
+    _validateWawasanColumns(columns) {
+        if (!Array.isArray(columns)) {
+            throw new HttpError(400, `Wawasan 2020 needs ${WAWASAN_MIN_COLUMNS}-${WAWASAN_MAX_COLUMNS} columns`);
+        }
+        const cleaned = columns
+            .map((c) => (typeof c === 'string' ? c.trim() : ''))
+            .filter((c) => c.length > 0);
+        if (cleaned.length < WAWASAN_MIN_COLUMNS || cleaned.length > WAWASAN_MAX_COLUMNS) {
+            throw new HttpError(400, `Wawasan 2020 needs ${WAWASAN_MIN_COLUMNS}-${WAWASAN_MAX_COLUMNS} columns`);
+        }
+        const seen = new Set();
+        for (const name of cleaned) {
+            if (name.length > WAWASAN_MAX_COLUMN_NAME) {
+                throw new HttpError(400, `Column names must be ${WAWASAN_MAX_COLUMN_NAME} characters or fewer`);
+            }
+            const key = name.toLowerCase();
+            if (seen.has(key)) {
+                throw new HttpError(400, `Duplicate column name: ${name}`);
+            }
+            seen.add(key);
+        }
+        return cleaned;
+    }
+
+    _openWawasanRound(letter, columnCount) {
+        return {
+            letter,
+            status: 'open',
+            answers: {
+                challenger: Array.from({ length: columnCount }, () => ''),
+                opponent: Array.from({ length: columnCount }, () => ''),
+            },
+            submitted: { challenger: false, opponent: false },
+        };
+    }
+
+    /**
+     * Submit the caller's answers for the currently open Wawasan row. Empty
+     * strings mean "skip this column". Every non-empty answer must start
+     * with the row's letter. When both players have submitted, the row
+     * closes and the next letter opens automatically; after the 26th letter
+     * the duel completes with calculated totals.
+     */
+    async submitWawasanAnswers(duelId, userId, answers) {
+        const duel = await this._load(duelId);
+
+        if (duel.status === 'completed') {
+            return this._toPublic(duel, userId);
+        }
+
+        const slot = this._slotForUser(duel, userId);
+        if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
+        if (duel.status !== 'playing') {
+            throw new HttpError(400, 'The duel has not started yet');
+        }
+        if (duel.mode !== WAWASAN_MODE || !duel.wawasan) {
+            throw new HttpError(400, 'This duel is not a Wawasan 2020 game');
+        }
+
+        const w = duel.wawasan;
+        const round = w.rounds[w.currentRound];
+        if (!round || round.status !== 'open') {
+            throw new HttpError(400, 'There is no open row right now — wait for the next letter');
+        }
+        if (round.submitted[slot]) {
+            throw new HttpError(400, 'You already submitted answers for this row');
+        }
+
+        if (!Array.isArray(answers) || answers.length !== w.columns.length) {
+            throw new HttpError(400, `Provide exactly ${w.columns.length} answers (empty string to skip)`);
+        }
+        const cleaned = answers.map((value, index) => {
+            const text = typeof value === 'string' ? value.trim() : '';
+            if (text.length > WAWASAN_MAX_ANSWER) {
+                throw new HttpError(400, `Answer for "${w.columns[index]}" is too long`);
+            }
+            if (text && text[0].toLowerCase() !== round.letter.toLowerCase()) {
+                throw new HttpError(400, `"${w.columns[index]}" must start with the letter ${round.letter}`);
+            }
+            return text;
+        });
+
+        round.answers[slot] = cleaned;
+        round.submitted[slot] = true;
+
+        const actor = duel[slot];
+        actor.lastActiveAt = new Date();
+        actor.disconnectedAt = null;
+
+        // Both sheets in — move to REVIEW phase so both players can see
+        // and challenge each other's answers before the row is locked.
+        if (round.submitted.challenger && round.submitted.opponent) {
+            round.status = 'review';
+            round.challenges = { challenger: {}, opponent: {} };
+            round.confirmed = { challenger: false, opponent: false };
+        }
+
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Challenge (omit) a specific opponent answer during the review phase.
+     * The challenger marks that column as invalid for the opponent.
+     * The opponent does NOT get points for that column, but the challenger
+     * still scores normally based on their own answer vs the (now omitted) opponent answer.
+     */
+    async challengeWawasanAnswer(duelId, userId, columnIndex) {
+        const duel = await this._load(duelId);
+
+        if (duel.status === 'completed') {
+            return this._toPublic(duel, userId);
+        }
+
+        const slot = this._slotForUser(duel, userId);
+        if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
+        if (duel.mode !== WAWASAN_MODE || !duel.wawasan) {
+            throw new HttpError(400, 'This duel is not a Wawasan 2020 game');
+        }
+
+        const w = duel.wawasan;
+        const round = w.rounds[w.currentRound];
+        if (!round || round.status !== 'review') {
+            throw new HttpError(400, 'There is no review in progress right now');
+        }
+
+        const otherSlot = slot === 'challenger' ? 'opponent' : 'challenger';
+        if (!Number.isInteger(columnIndex) || columnIndex < 0 || columnIndex >= w.columns.length) {
+            throw new HttpError(400, 'Invalid column index');
+        }
+
+        // Toggle: marking is independent per column. Challenging again reverts to valid.
+        const key = String(columnIndex);
+        if (round.challenges[slot][key] || round.challenges[slot][columnIndex]) {
+            delete round.challenges[slot][key];
+            delete round.challenges[slot][columnIndex];
+        } else {
+            round.challenges[slot][columnIndex] = true;
+        }
+
+        // Activity proof
+        const actor = duel[slot];
+        actor.lastActiveAt = new Date();
+        actor.disconnectedAt = null;
+
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Confirm the review phase is complete for the caller.
+     * When BOTH players confirm, the round is locked (status -> done)
+     * and the next letter opens (or duel ends).
+     */
+    async confirmWawasanReview(duelId, userId) {
+        const duel = await this._load(duelId);
+
+        if (duel.status === 'completed') {
+            return this._toPublic(duel, userId);
+        }
+
+        const slot = this._slotForUser(duel, userId);
+        if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
+        if (duel.mode !== WAWASAN_MODE || !duel.wawasan) {
+            throw new HttpError(400, 'This duel is not a Wawasan 2020 game');
+        }
+
+        const w = duel.wawasan;
+        const round = w.rounds[w.currentRound];
+        if (!round || round.status !== 'review') {
+            throw new HttpError(400, 'There is no review in progress right now');
+        }
+
+        round.confirmed[slot] = true;
+
+        const actor = duel[slot];
+        actor.lastActiveAt = new Date();
+        actor.disconnectedAt = null;
+
+        // Both confirmed → lock the round and advance
+        if (round.confirmed.challenger && round.confirmed.opponent) {
+            round.status = 'done';
+            const nextIndex = w.currentRound + 1;
+            if (nextIndex < w.letters.length) {
+                w.currentRound = nextIndex;
+                w.rounds.push(this._openWawasanRound(w.letters[nextIndex], w.columns.length));
+            } else {
+                this._finalizeWawasan(duel);
+                await this._save(duel);
+                return this._toPublic(duel, userId);
+            }
+        }
+
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Stop a Wawasan 2020 game at any time. Only the owner (challenger) can
+     * stop. The currently open row is discarded — only previously completed
+     * rounds count toward the totals.
+     */
+    async stopWawasan(duelId, userId) {
+        const duel = await this._load(duelId);
+
+        if (duel.status === 'completed') {
+            return this._toPublic(duel, userId);
+        }
+
+        if (this._slotForUser(duel, userId) !== 'challenger') {
+            throw new HttpError(403, 'Only the duel creator can stop the game');
+        }
+        if (duel.status !== 'playing') {
+            throw new HttpError(400, 'The duel has not started yet');
+        }
+        if (duel.mode !== WAWASAN_MODE || !duel.wawasan) {
+            throw new HttpError(400, 'This duel is not a Wawasan 2020 game');
+        }
+
+        const w = duel.wawasan;
+        // Discard the open row — it does not count.
+        w.rounds = w.rounds.filter((round) => round.status === 'done');
+        w.stoppedAt = new Date();
+
+        this._finalizeWawasan(duel);
+        await this._save(duel);
+        return this._toPublic(duel, userId);
+    }
+
+    /**
+     * Score every completed row column-by-column with independent per-player
+     * scoring. Challenges (omissions) only affect the challenged player's points.
+     *
+     * For each column and each player:
+     * - If the player's own answer is empty/skipped → 0 points
+     * - If the opponent's answer is challenged (omitted) by this player → opponent gets 0, but this player still scores
+     * - If both answers exist and are different (after normalization) → this player earns pointsPerColumn
+     * - If both answers exist and are the same → 0 points
+     *
+     * This means: you can earn points even if your opponent's answer is invalid,
+     * and you can block your opponent from earning points by challenging their answer.
+     */
+    _calculateWawasanScores(duel) {
+        const w = duel.wawasan;
+        const totals = { challenger: 0, opponent: 0 };
+        for (const round of w.rounds) {
+            if (round.status !== 'done') continue;
+            for (let i = 0; i < w.columns.length; i++) {
+                const aRaw = round.answers.challenger[i] || '';
+                const bRaw = round.answers.opponent[i] || '';
+                const a = normalizeAnswer(aRaw);
+                const b = normalizeAnswer(bRaw);
+                const aChallenged = round.challenges?.opponent?.[String(i)] === true || round.challenges?.opponent?.[i] === true;
+                const bChallenged = round.challenges?.challenger?.[String(i)] === true || round.challenges?.challenger?.[i] === true;
+
+                // Independent per-player: your answer scores if it exists, isn't
+                // challenged, and isn't identical to the opponent's answer.
+                // Skipping doesn't penalise the other player — they still score
+                // if they provided a valid different word.
+                if (a && !aChallenged) {
+                    if (!b || a !== b) totals.challenger += w.pointsPerColumn;
+                }
+                if (b && !bChallenged) {
+                    if (!a || b !== a) totals.opponent += w.pointsPerColumn;
+                }
+            }
+        }
+        return totals;
+    }
+
+    /**
+     * Settle a Wawasan duel: totals become the participants' scores and the
+     * higher total wins (tie = draw).
+     */
+    _finalizeWawasan(duel) {
+        const totals = this._calculateWawasanScores(duel);
+        const now = new Date();
+        for (const slot of ['challenger', 'opponent']) {
+            const participant = duel[slot];
+            participant.score = totals[slot];
+            participant.submittedAt = participant.submittedAt || now;
+            participant.lastActiveAt = now;
+            participant.disconnectedAt = null;
+        }
+
+        duel.status = 'completed';
+        if (totals.challenger > totals.opponent) {
+            duel.result = 'challenger';
+            duel.winnerId = duel.challenger.userId;
+        } else if (totals.opponent > totals.challenger) {
+            duel.result = 'opponent';
+            duel.winnerId = duel.opponent.userId;
+        } else {
+            duel.result = 'draw';
+            duel.winnerId = null;
+        }
     }
 
     async _createDuelGame(duel, slot, userId) {
@@ -519,6 +929,10 @@ class DuelService extends EventEmitter {
             throw new HttpError(400, 'The duel has not started yet');
         }
 
+        if (duel.mode === WAWASAN_MODE) {
+            throw new HttpError(400, 'Wawasan 2020 duels are scored from the paper sheet, not from letter games');
+        }
+
         const participant = duel[slot];
 
         if (participant.submittedAt) {
@@ -609,6 +1023,7 @@ class DuelService extends EventEmitter {
         if (!slot) throw new HttpError(403, 'You are not a participant in this duel');
         if (duel.status === 'completed') throw new HttpError(409, 'Duel already completed');
         if (duel.status !== 'playing') throw new HttpError(400, 'The duel has not started yet');
+        if (duel.mode === WAWASAN_MODE) throw new HttpError(400, 'Letter resets are not available in Wawasan 2020');
 
         const newLetters = randomLetters(duel.letterCount);
 

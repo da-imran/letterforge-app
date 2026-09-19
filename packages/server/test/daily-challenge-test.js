@@ -49,7 +49,10 @@ describe('Daily Challenge', () => {
 
         expect(pool.length).to.be.greaterThan(1000);
         expect(pool.some(e => e.word === challenge.word)).to.be.true;
-        expect(pool.find(e => e.word === challenge.word).clue).to.equal(challenge.clue);
+        const entry = pool.find(e => e.word === challenge.word);
+        expect(entry.meanings).to.be.an('array');
+        expect(entry.meanings).to.include(challenge.clue);
+        expect(challenge.meanings).to.deep.equal(entry.meanings);
     });
 
     it('[DAILY / DC03] - Game creation uses the clue, 5 rounds, no letters, and hides the answer', async () => {

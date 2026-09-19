@@ -1,10 +1,13 @@
 export type GameMode = 'normal_mode' | 'time_attack' | 'survival_mode' | 'chain_mode' | 'fade_mode' | 'daily_challenge';
-export type DuelMode = Exclude<GameMode, 'daily_challenge' | 'fade_mode'>;
+// Wawasan 2020 is duel-only: it never appears as a solo play mode.
+export type WawasanMode = 'wawasan_mode';
+export type DuelMode = Exclude<GameMode, 'daily_challenge' | 'fade_mode'> | WawasanMode;
 export type Period = 'daily' | 'weekly' | 'all_time';
 
 export interface DailyChallenge {
   date: string;
   clue: string;
+  meanings?: string[];
   attempts: number;
   seed: string;
 }
@@ -22,6 +25,24 @@ export interface DuelParticipant {
   forfeited: boolean;
 }
 
+export interface WawasanRoundState {
+  letter: string;
+  status: 'open' | 'review' | 'done';
+  answers: { challenger: Array<string | null>; opponent: Array<string | null> };
+  submitted: { challenger: boolean; opponent: boolean };
+  confirmed?: { challenger: boolean; opponent: boolean };
+  challenges?: { challenger: Record<string, boolean>; opponent: Record<string, boolean> };
+}
+
+export interface WawasanState {
+  columns: string[];
+  letters: string[];
+  currentRound: number;
+  pointsPerColumn: number;
+  rounds: WawasanRoundState[];
+  stoppedAt: string | null;
+}
+
 export interface Duel {
   _id: string;
   code: string;
@@ -29,6 +50,7 @@ export interface Duel {
   letters: string[] | null;
   mode: DuelMode | null;
   maxRounds: number | null;
+  wawasan: WawasanState | null;
   status: DuelStatus;
   result: DuelResult;
   winnerId: string | null;
@@ -71,6 +93,7 @@ export interface Game {
   currentScore?: number;
   clue?: string;
   dailyAnswer?: string;
+  dailyMeanings?: string[];
 }
 
 export interface SubmitWordResponse {

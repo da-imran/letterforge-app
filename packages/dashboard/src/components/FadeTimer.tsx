@@ -16,19 +16,23 @@ interface FadeTimerProps {
 export const FadeTimer: React.FC<FadeTimerProps> = ({ restartKey, onFadeComplete, className }) => {
   const [progress, setProgress] = useState(100);
   const onCompleteRef = useRef(onFadeComplete);
+  const firedRef = useRef(false);
 
   useEffect(() => {
     onCompleteRef.current = onFadeComplete;
   }, [onFadeComplete]);
 
   useEffect(() => {
+    firedRef.current = false;
     setProgress(100);
     const interval = setInterval(() => {
+      // Updater stays pure: no side effects in here — React may invoke it
+      // during render, so calling the parent callback here crashes with
+      // "Cannot update a component while rendering a different component".
       setProgress((prev) => {
         const next = prev - (100 * 50) / FADE_DURATION_MS;
         if (next <= 0) {
           clearInterval(interval);
-          onCompleteRef.current?.();
           return 0;
         }
         return next;
@@ -36,6 +40,14 @@ export const FadeTimer: React.FC<FadeTimerProps> = ({ restartKey, onFadeComplete
     }, 50);
     return () => clearInterval(interval);
   }, [restartKey]);
+
+  // Fire completion as an effect (commit phase) exactly once per round.
+  useEffect(() => {
+    if (progress <= 0 && !firedRef.current) {
+      firedRef.current = true;
+      onCompleteRef.current?.();
+    }
+  }, [progress]);
 
   const secondsLeft = ((progress / 100) * (FADE_DURATION_MS / 1000)).toFixed(1);
 

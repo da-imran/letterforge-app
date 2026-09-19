@@ -44,9 +44,9 @@ const DATA_DIR = path.join(__dirname, '..', 'modules', 'dictionary', 'data');
 let poolCache = null;
 
 /**
- * Build the candidate pool of { word, clue } pairs from the dictionary's
- * MEANINGS. Words with unusable clues (e.g. "letter of the alphabet") are
- * excluded so the daily challenge is always answerable.
+ * Build the candidate pool of { word, meanings[] } from the dictionary's
+ * MEANINGS. Words with unusable clues are excluded. All valid meanings
+ * are stored so the frontend can cycle through them.
  */
 function buildDailyPool() {
     if (poolCache) return poolCache;
@@ -59,16 +59,22 @@ function buildDailyPool() {
             if (!/^[a-z]+$/i.test(word)) continue;
             if (word.length < 4 || word.length > 12) continue;
 
-            const meanings = data[word].MEANINGS;
-            if (!meanings || typeof meanings !== 'object') continue;
-            const first = Object.keys(meanings)[0];
-            const entry = meanings[first];
-            if (!Array.isArray(entry)) continue;
-            const definition = entry[1];
-            if (typeof definition !== 'string' || !definition.trim()) continue;
-            if (/letter of the (roman )?alphabet/i.test(definition)) continue;
+            const meaningsObj = data[word].MEANINGS;
+            if (!meaningsObj || typeof meaningsObj !== 'object') continue;
 
-            pool.push({ word: word.toLowerCase(), clue: definition });
+            const allDefinitions = [];
+            for (const key of Object.keys(meaningsObj).sort()) {
+                const entry = meaningsObj[key];
+                if (!Array.isArray(entry)) continue;
+                const definition = entry[1];
+                if (typeof definition !== 'string' || !definition.trim()) continue;
+                if (/letter of the (roman )?alphabet/i.test(definition)) continue;
+                allDefinitions.push(definition.trim());
+            }
+
+            if (allDefinitions.length === 0) continue;
+
+            pool.push({ word: word.toLowerCase(), meanings: allDefinitions });
         }
     }
 
@@ -77,8 +83,9 @@ function buildDailyPool() {
 }
 
 /**
- * Today's shared challenge: one deterministic { word, clue } pair for every
- * player. The player is shown the clue and must submit the matching word.
+ * Today's shared challenge: one deterministic { word, meanings[] } for every
+ * player. The player is shown the first meaning and can cycle through
+ * additional meanings with a "Next" button.
  */
 function getTodayChallenge() {
     const dateKey = getDateKey();
@@ -89,7 +96,8 @@ function getTodayChallenge() {
     return {
         date: dateKey,
         word: entry.word,
-        clue: entry.clue,
+        meanings: entry.meanings,
+        clue: entry.meanings[0], // Backward compat: first meaning
         attempts: DAILY_MAX_ROUNDS,
         seed: crypto.createHash('sha256').update(dateKey).digest('hex').slice(0, 16),
     };

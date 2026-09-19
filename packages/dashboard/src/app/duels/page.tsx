@@ -22,6 +22,7 @@ const DUEL_MODES: { value: DuelMode; label: string; description: string }[] = [
   { value: 'time_attack', label: 'Time Attack', description: 'Race a 60-second clock' },
   { value: 'survival_mode', label: 'Endless', description: 'Every miss costs a life' },
   { value: 'chain_mode', label: 'Chain', description: 'Chain letters into words' },
+  { value: 'wawasan_mode', label: '🇲🇾 Wawasan 2020', description: 'Classic A–Z paper duel — you pick 3–10 columns' },
 ];
 
 const MODE_LABELS: Record<string, string> = {
@@ -29,7 +30,26 @@ const MODE_LABELS: Record<string, string> = {
   time_attack: 'Time Attack',
   survival_mode: 'Endless Mode',
   chain_mode: 'Chain Mode',
+  wawasan_mode: 'Wawasan 2020',
 };
+
+// Bilingual Wawasan 2020 column presets — the host picks Melayu, English,
+// or both; free-text columns can be anything the host wants.
+const WAWASAN_PRESETS: { ms: string; en: string }[] = [
+  { ms: 'Makanan', en: 'Food' },
+  { ms: 'Minuman', en: 'Drinks' },
+  { ms: 'Negara', en: 'Country' },
+  { ms: 'Negeri', en: 'State' },
+  { ms: 'Nama Orang', en: 'Name' },
+  { ms: 'Haiwan', en: 'Animal' },
+  { ms: 'Buah-buahan', en: 'Fruits' },
+  { ms: 'Pekerjaan', en: 'Occupation' },
+  { ms: 'Bandar', en: 'City' },
+  { ms: 'Kenderaan', en: 'Vehicle' },
+];
+type WawasanPresetLang = 'ms' | 'en' | 'both';
+const WAWASAN_MIN_COLUMNS = 3;
+const WAWASAN_MAX_COLUMNS = 10;
 
 function participantLabel(duel: Duel, key: 'challenger' | 'opponent'): string {
   const p = duel[key];
@@ -47,6 +67,20 @@ export default function DuelsPage() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [selectedMode, setSelectedMode] = useState<DuelMode>('normal_mode');
+  const [wawasanColumns, setWawasanColumns] = useState<string[]>(['Makanan', 'Minuman', 'Negara']);
+  const [wawasanInput, setWawasanInput] = useState('');
+  const [wawasanPresetLang, setWawasanPresetLang] = useState<WawasanPresetLang>('both');
+
+  const wawasanPresetLabel = (preset: { ms: string; en: string }): string =>
+    wawasanPresetLang === 'ms' ? preset.ms : wawasanPresetLang === 'en' ? preset.en : `${preset.ms} · ${preset.en}`;
+
+  const wawasanPresetValue = (preset: { ms: string; en: string }): string =>
+    wawasanPresetLang === 'ms' ? preset.ms : wawasanPresetLang === 'en' ? preset.en : `${preset.ms} / ${preset.en}`;
+
+  const isPresetUsed = (preset: { ms: string; en: string }): boolean =>
+    wawasanColumns.some(
+      (c) => c.toLowerCase() === preset.ms.toLowerCase() || c.toLowerCase() === preset.en.toLowerCase(),
+    );
   const [copied, setCopied] = useState(false);
   const [live, setLive] = useState<ConnectionState>('closed');
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -72,11 +106,12 @@ export default function DuelsPage() {
 
   // When the host starts the game, BOTH players are dealt simultaneously —
   // take everyone to the game page in realtime so play begins together.
+  // (Wawasan 2020 has no per-player game — the shared paper sheet is enough.)
   useEffect(() => {
-    if (duel?.status === 'playing' && duel.myGameId) {
+    if (duel?.status === 'playing' && (duel.myGameId || duel.mode === 'wawasan_mode')) {
       router.push(`/play?duelId=${duel._id}`);
     }
-  }, [duel?.status, duel?.myGameId, duel?._id, router]);
+  }, [duel?.status, duel?.myGameId, duel?.mode, duel?._id, router]);
 
   // Both players type the same code: the first to enter creates the duel,
   // the second joins it.
@@ -125,17 +160,41 @@ export default function DuelsPage() {
   }, [duel]);
 
   const startPlaying = () => {
-    if (!duel?.myGameId) return;
+    if (!duel) return;
+    if (!duel.myGameId && duel.mode !== 'wawasan_mode') return;
     router.push(`/play?duelId=${duel._id}`);
   };
 
   const amChallenger = duel?.challenger.userId === (user?._id ?? null);
 
+  const addWawasanColumn = (name: string) => {
+    const trimmed = name.trim().slice(0, 30);
+    if (!trimmed || wawasanColumns.length >= WAWASAN_MAX_COLUMNS) return;
+    if (wawasanColumns.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
+      toast({ variant: "destructive", title: "Duplicate column", description: `"${trimmed}" is already on the sheet.` });
+      return;
+    }
+    setWawasanColumns((prev) => [...prev, trimmed]);
+    setWawasanInput('');
+  };
+
+  const removeWawasanColumn = (name: string) => {
+    setWawasanColumns((prev) => prev.filter((c) => c !== name));
+  };
+
   const handleStart = async () => {
     if (!duel || isStarting) return;
+    if (selectedMode === 'wawasan_mode' && wawasanColumns.length < WAWASAN_MIN_COLUMNS) {
+      toast({ variant: "destructive", title: "Not enough columns", description: `Wawasan 2020 needs at least ${WAWASAN_MIN_COLUMNS} columns.` });
+      return;
+    }
     setIsStarting(true);
     try {
-      const updated = await api.startDuel(duel._id, selectedMode);
+      const updated = await api.startDuel(
+        duel._id,
+        selectedMode,
+        selectedMode === 'wawasan_mode' ? wawasanColumns : undefined,
+      );
       setDuel(updated);
       toast({ title: "Duel Started!", description: "Both players are in the game now. Good luck!" });
     } catch (err: any) {
@@ -245,7 +304,7 @@ export default function DuelsPage() {
                   {duel.maxRounds ? ` · ${duel.maxRounds} rounds` : ''}
                 </CardDescription>
               </div>
-              {isParticipant && duel.status === 'playing' && duel.myGameId && (
+              {isParticipant && duel.status === 'playing' && (duel.myGameId || duel.mode === 'wawasan_mode') && (
                 <Button onClick={startPlaying} className="gap-2">
                   <Play className="w-4 h-4" />
                   Play Now
@@ -313,6 +372,80 @@ export default function DuelsPage() {
                     <p className="text-center text-xs text-muted-foreground">
                       {DUEL_MODES.find((m) => m.value === selectedMode)?.description}
                     </p>
+                    {selectedMode === 'wawasan_mode' && (
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-3">
+                        <p className="text-center text-xs font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                          📝 Your paper columns ({wawasanColumns.length}/{WAWASAN_MAX_COLUMNS})
+                        </p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {wawasanColumns.map((col) => (
+                            <Badge key={col} variant="secondary" className="gap-1 py-1 pl-3 pr-1 text-sm">
+                              {col}
+                              <button
+                                type="button"
+                                aria-label={`Remove ${col}`}
+                                onClick={() => removeWawasanColumn(col)}
+                                disabled={wawasanColumns.length <= WAWASAN_MIN_COLUMNS}
+                                className="ml-1 rounded-full px-1.5 hover:bg-destructive/20 hover:text-destructive disabled:opacity-30"
+                              >
+                                ✕
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        {wawasanColumns.length < WAWASAN_MAX_COLUMNS && (
+                          <form
+                            className="flex gap-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              addWawasanColumn(wawasanInput);
+                            }}
+                          >
+                            <Input
+                              value={wawasanInput}
+                              onChange={(e) => setWawasanInput(e.target.value)}
+                              placeholder="e.g. Makanan/Food, Negeri/State… (anything!)"
+                              maxLength={30}
+                              className="text-center"
+                            />
+                            <Button type="submit" variant="secondary" size="sm" className="shrink-0">
+                              Add
+                            </Button>
+                          </form>
+                        )}
+                        <div className="flex justify-center gap-1">
+                          {(['ms', 'en', 'both'] as WawasanPresetLang[]).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => setWawasanPresetLang(lang)}
+                              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+                                wawasanPresetLang === lang
+                                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/50'
+                                  : 'border border-border/60 text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                              }`}
+                            >
+                              {lang === 'ms' ? '🇲🇾 Melayu' : lang === 'en' ? '🇬🇧 English' : '🌐 Melayu + English'}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap justify-center gap-1.5">
+                          {WAWASAN_PRESETS.filter((p) => !isPresetUsed(p)).map((preset) => (
+                            <button
+                              key={preset.ms}
+                              type="button"
+                              onClick={() => addWawasanColumn(wawasanPresetValue(preset))}
+                              className="rounded-full border border-border/60 px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
+                            >
+                              + {wawasanPresetLabel(preset)}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-center text-[11px] text-muted-foreground">
+                          Each column is worth {Math.round(100 / Math.max(wawasanColumns.length, WAWASAN_MIN_COLUMNS))} points — 100 points split across the sheet.
+                        </p>
+                      </div>
+                    )}
                     <Button onClick={handleStart} disabled={isStarting} className="w-full gap-2">
                       {isStarting && <Loader2 className="w-4 h-4 animate-spin" />}
                       <Flag className="w-4 h-4" />

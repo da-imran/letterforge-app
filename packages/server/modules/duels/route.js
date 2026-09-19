@@ -83,11 +83,69 @@ module.exports = (duelService) => {
     router.post('/:duelId/start', authRequired, async (req, res, next) => {
         // #swagger.tags = ['duels']
         // #swagger.summary = 'Start a duel'
-        // #swagger.description = 'The creator selects a game mode and starts the duel; both players\' games are created together'
+        // #swagger.description = 'The creator selects a game mode and starts the duel; both players\' games are created together. Wawasan 2020 also needs `columns` (3-10 custom names).'
         try {
             const { duelId } = req.params;
-            const { mode } = req.body || {};
-            const duel = await duelService.startDuel(duelId, req.userId, mode);
+            const { mode, columns } = req.body || {};
+            const duel = await duelService.startDuel(duelId, req.userId, mode, { columns });
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Submit answers for the open Wawasan 2020 row
+    router.post('/:duelId/wawasan/answer', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Submit Wawasan 2020 answers'
+        // #swagger.description = 'Submits the caller\'s answers for the currently open letter row (empty string skips a column). Both players submitting closes the row.'
+        try {
+            const { duelId } = req.params;
+            const { answers } = req.body || {};
+            const duel = await duelService.submitWawasanAnswers(duelId, req.userId, answers);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Stop a Wawasan 2020 game (owner only, any time)
+    router.post('/:duelId/wawasan/stop', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Stop a Wawasan 2020 game'
+        // #swagger.description = 'Only the duel creator can stop. The open row is discarded and totals are calculated from completed rows.'
+        try {
+            const { duelId } = req.params;
+            const duel = await duelService.stopWawasan(duelId, req.userId);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Challenge (omit) a specific opponent answer during review
+    router.post('/:duelId/wawasan/challenge', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Challenge an opponent answer in Wawasan 2020'
+        // #swagger.description = 'During the review phase, mark one of the opponent\'s column answers as invalid. The opponent scores 0 for that column; your own scoring is unaffected.'
+        try {
+            const { duelId } = req.params;
+            const { columnIndex } = req.body || {};
+            const duel = await duelService.challengeWawasanAnswer(duelId, req.userId, columnIndex);
+            res.json(duel);
+        } catch (err) {
+            next(err);
+        }
+    });
+
+    // Confirm the review phase is complete (both must confirm to advance)
+    router.post('/:duelId/wawasan/confirm', authRequired, async (req, res, next) => {
+        // #swagger.tags = ['duels']
+        // #swagger.summary = 'Confirm Wawasan 2020 review phase'
+        // #swagger.description = 'Signal that you\'ve finished reviewing the opponent\'s answers. When both players confirm, the round locks and the next letter opens.'
+        try {
+            const { duelId } = req.params;
+            const duel = await duelService.confirmWawasanReview(duelId, req.userId);
             res.json(duel);
         } catch (err) {
             next(err);

@@ -14,8 +14,13 @@
 # MongoDB and RabbitMQ are started automatically with Docker Compose when
 # they aren't already running.
 #
+# The script never sets service ports. Each service keeps its own port
+# configuration (packages/server/.env PORT, dashboard `next dev -p` flag).
+# The endpoints below are the single source of truth for display and for
+# locating leftover listeners on stop — they must match the service config.
+#
 # Override defaults with env vars:
-#   SERVER_PORT=8888 DASHBOARD_PORT=9002 MONGO_URI=mongodb://...
+#   API_BASE_ENDPOINT=http://localhost:8888/letter-forge/v1 DASHBOARD_ENDPOINT=http://localhost:9002
 #   LOG_DIR=/abs/path/to/logs   # defaults to <repo-root>/logs
 # =============================================================================
 
@@ -24,9 +29,20 @@ set -euo pipefail
 # --- Config ---
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${LOG_DIR:-$ROOT_DIR/logs}"
-SERVER_PORT="${SERVER_PORT:-8888}"
-DASHBOARD_PORT="${DASHBOARD_PORT:-9002}"
+API_BASE_ENDPOINT="${API_BASE_ENDPOINT:-http://localhost:8888/letter-forge/v1}"
+DASHBOARD_ENDPOINT="${DASHBOARD_ENDPOINT:-http://localhost:9002}"
+API_DOCS_ENDPOINT="${API_DOCS_ENDPOINT:-${API_BASE_ENDPOINT%/}/api-docs}"
 RABBITMQ_PORT="${RABBITMQ_PORT:-5672}"
+
+# Extract the port from an endpoint URL. Used only to locate leftover
+# listeners on stop — never exported to the services.
+port_from_endpoint() {
+  printf '%s' "$1" | sed -n 's#^https\?://[^/:]*:\([0-9]\+\).*#\1#p'
+}
+SERVER_PORT="$(port_from_endpoint "$API_BASE_ENDPOINT")"
+SERVER_PORT="${SERVER_PORT:-8888}"
+DASHBOARD_PORT="$(port_from_endpoint "$DASHBOARD_ENDPOINT")"
+DASHBOARD_PORT="${DASHBOARD_PORT:-9002}"
 PID_FILE="${PID_FILE:-$LOG_DIR/app.pid}"
 SERVER_LOG="${SERVER_LOG:-$LOG_DIR/server.log}"
 DASHBOARD_LOG="${DASHBOARD_LOG:-$LOG_DIR/dashboard.log}"
@@ -240,19 +256,21 @@ start_services() {
   )
 
   # --- 6. Start server ---
-  info "Starting API server on port ${SERVER_PORT}..."
+  # No PORT override: the server uses PORT from packages/server/.env.
+  info "Starting API server (${API_BASE_ENDPOINT})..."
   (
     cd packages/server
-    PORT="${SERVER_PORT}" NODE_ENV=local npm run dev
+    NODE_ENV=local npm run dev
   ) > "$SERVER_LOG" 2>&1 &
   SERVER_PID=$!
   info "API server PID: $SERVER_PID (logs: $SERVER_LOG)"
 
   # --- 7. Start dashboard ---
-  info "Starting dashboard dev server on port ${DASHBOARD_PORT}..."
+  # No PORT override: the dashboard uses its own `next dev -p` flag.
+  info "Starting dashboard dev server (${DASHBOARD_ENDPOINT})..."
   (
     cd packages/dashboard
-    PORT="${DASHBOARD_PORT}" npm run dev
+    npm run dev
   ) > "$DASHBOARD_LOG" 2>&1 &
   DASHBOARD_PID=$!
   info "Dashboard PID: $DASHBOARD_PID (logs: $DASHBOARD_LOG)"
@@ -273,25 +291,12 @@ start_services() {
   sleep 3
 
   # --- 8. Summary ---
-  LAN_IP=""
-  if command -v ipconfig &>/dev/null && ipconfig getifaddr en0 >/dev/null 2>&1; then
-    LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || true)"
-  fi
-  if [ -z "$LAN_IP" ] && command -v hostname &>/dev/null; then
-    LAN_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
-  fi
-
   echo ""
   echo -e "${BOLD}======================================${RESET}"
   echo -e "${GREEN}${BOLD}  Running!${RESET}"
-  echo -e "  Dashboard  ->  ${CYAN}http://localhost:${DASHBOARD_PORT}${RESET}"
-  echo -e "  API        ->  ${CYAN}http://localhost:${SERVER_PORT}/letter-forge/v1${RESET}"
-  echo -e "  API docs   ->  ${CYAN}http://localhost:${SERVER_PORT}/letter-forge/v1/api-docs${RESET}"
-  if [ -n "$LAN_IP" ]; then
-    echo -e "  -- Same-network (LAN) --"
-    echo -e "  Dashboard  ->  ${CYAN}http://${LAN_IP}:${DASHBOARD_PORT}${RESET}"
-    echo -e "  API        ->  ${CYAN}http://${LAN_IP}:${SERVER_PORT}/letter-forge/v1${RESET}"
-  fi
+  echo -e "  Dashboard  ->  ${CYAN}${DASHBOARD_ENDPOINT}${RESET}"
+  echo -e "  API        ->  ${CYAN}${API_BASE_ENDPOINT}${RESET}"
+  echo -e "  API docs   ->  ${CYAN}${API_DOCS_ENDPOINT}${RESET}"
   echo -e "  API logs   ->  ${CYAN}$SERVER_LOG${RESET}"
   echo -e "  Web logs   ->  ${CYAN}$DASHBOARD_LOG${RESET}"
   echo -e "  Worker logs ->  ${CYAN}$WORKER_LOG${RESET}"
@@ -409,8 +414,8 @@ start_docker_services() {
   echo ""
   echo -e "${BOLD}======================================${RESET}"
   echo -e "${GREEN}${BOLD}  Docker services running!${RESET}"
-  echo -e "  Dashboard  ->  ${CYAN}http://localhost:${DASHBOARD_PORT}${RESET}"
-  echo -e "  API        ->  ${CYAN}http://localhost:${SERVER_PORT}/letter-forge/v1${RESET}"
+  echo -e "  Dashboard  ->  ${CYAN}${DASHBOARD_ENDPOINT}${RESET}"
+  echo -e "  API        ->  ${CYAN}${API_BASE_ENDPOINT}${RESET}"
   echo -e "  MongoDB    ->  ${CYAN}localhost:27017${RESET}"
   echo -e "${BOLD}======================================${RESET}"
   echo -e "  To stop:      ${BOLD}./run-local.sh docker-stop${RESET}"

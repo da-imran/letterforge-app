@@ -297,10 +297,36 @@ export const api = {
     });
   },
 
-  startDuel: async (duelId: string, mode: DuelMode): Promise<Duel> => {
+  startDuel: async (duelId: string, mode: DuelMode, columns?: string[]): Promise<Duel> => {
     return fetchJson<Duel>(`/duels/${duelId}/start`, {
       method: 'POST',
-      body: JSON.stringify({ mode }),
+      body: JSON.stringify(columns ? { mode, columns } : { mode }),
+    });
+  },
+
+  submitWawasanAnswers: async (duelId: string, answers: string[]): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/wawasan/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ answers }),
+    });
+  },
+
+  stopWawasan: async (duelId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/wawasan/stop`, {
+      method: 'POST',
+    });
+  },
+
+  challengeWawasanAnswer: async (duelId: string, columnIndex: number): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/wawasan/challenge`, {
+      method: 'POST',
+      body: JSON.stringify({ columnIndex }),
+    });
+  },
+
+  confirmWawasanReview: async (duelId: string): Promise<Duel> => {
+    return fetchJson<Duel>(`/duels/${duelId}/wawasan/confirm`, {
+      method: 'POST',
     });
   },
 
