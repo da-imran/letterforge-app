@@ -3,441 +3,654 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LetterForge — Word Game Platform</title>
+<title>LetterForge — Forge your words.</title>
+<meta name="description" content="A dark, fast word game. Solo, duel, and the Malaysian classic Wawasan 2020 — on paper.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --void:#0A0A0F;--surface:#13131E;--lift:#1E1E30;--border:#2A2A42;
-    --violet:#7B2FFF;--violet-glow:rgba(123,47,255,0.25);
-    --cyan:#00F5D4;--cyan-dim:rgba(0,245,212,0.12);
-    --text:#F0EEF8;--muted:#8A8AA8;--score:#FFD166;
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#07070B;
+    --bg-2:#0F0F14;
+    --surface:#13131A;
+    --surface-2:#1A1A22;
+    --line:#23232E;
+    --line-2:#2A2A36;
+    --text:#F5F3EF;
+    --muted:#9A9AA8;
+    --muted-2:#6E6E7A;
+    --violet:#8B5CF6;
+    --violet-soft:rgba(139,92,246,.14);
+    --cyan:#2DD4BF;
+    --cyan-soft:rgba(45,212,191,.12);
+    --amber:#F59E0B;
+    --amber-soft:rgba(245,158,11,.14);
+    --paper:#F6F1DE;
+    --paper-line:#E7E0C6;
+    --radius:20px;
+    --radius-sm:14px;
+    --max:1080px;
   }
-  html{scroll-behavior:smooth;}
-  body{background:var(--void);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:16px;line-height:1.6;overflow-x:hidden;}
-  nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:18px 40px;background:rgba(10,10,15,0.7);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);}
-  .nav-logo{font-family:'JetBrains Mono',monospace;font-size:1.05rem;font-weight:600;letter-spacing:.05em;color:var(--cyan);}
-  .nav-logo span{color:var(--violet);}
-  .nav-links{display:flex;gap:32px;}
-  .nav-links a{color:var(--muted);text-decoration:none;font-size:.85rem;font-weight:500;letter-spacing:.04em;text-transform:uppercase;transition:color .2s;}
-  .nav-links a:hover{color:var(--text);}
-  .hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:120px 24px 80px;overflow:hidden;}
-  .hero::before{content:'';position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.08) 3px,rgba(0,0,0,0.08) 4px);pointer-events:none;}
-  .hero-glow{position:absolute;top:30%;left:50%;z-index:1;transform:translate(-50%,-50%);width:600px;height:400px;background:radial-gradient(ellipse,rgba(123,47,255,0.18) 0%,transparent 70%);pointer-events:none;}
-  /* FIX: canvas fills the full hero */
-  #tile-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;}
-  .hero-content{position:relative;z-index:3;}
-  .hero-eyebrow{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.72rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);background:var(--cyan-dim);border:1px solid rgba(0,245,212,.25);padding:5px 14px;border-radius:3px;margin-bottom:28px;}
-  h1{font-size:clamp(3rem,8vw,6.5rem);font-weight:700;line-height:1.0;letter-spacing:-.03em;margin-bottom:24px;}
-  h1 em{font-style:normal;background:linear-gradient(135deg,var(--violet),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-  .hero-sub{font-size:1.1rem;color:var(--muted);max-width:520px;margin:0 auto 44px;font-weight:400;}
-  .hero-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
-  .btn{display:inline-flex;align-items:center;gap:8px;padding:13px 28px;border-radius:6px;font-family:'Space Grotesk',sans-serif;font-size:.9rem;font-weight:600;text-decoration:none;letter-spacing:.02em;cursor:pointer;transition:transform .15s,box-shadow .15s;border:none;}
-  .btn:hover{transform:translateY(-2px);}
-  .btn-primary{background:var(--violet);color:#fff;box-shadow:0 0 24px var(--violet-glow);}
-  .btn-primary:hover{box-shadow:0 0 36px rgba(123,47,255,.45);}
-  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border);}
-  .btn-ghost:hover{color:var(--text);border-color:var(--muted);}
-  .hero-score{margin-top:60px;display:flex;gap:48px;justify-content:center;flex-wrap:wrap;}
-  .score-item{text-align:center;}
-  .score-num{font-family:'JetBrains Mono',monospace;font-size:2.2rem;font-weight:600;color:var(--score);display:block;line-height:1;}
-  .score-label{font-size:.72rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px;display:block;}
-  section{padding:100px 40px;max-width:1100px;margin:0 auto;}
-  .section-label{font-family:'JetBrains Mono',monospace;font-size:.7rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--violet);margin-bottom:14px;}
-  h2{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;letter-spacing:-.025em;line-height:1.1;margin-bottom:16px;}
-  .section-sub{color:var(--muted);font-size:1rem;max-width:560px;margin-bottom:56px;}
-  .modes-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;}
-  .mode-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:28px 24px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;cursor:default;}
-  .mode-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--violet-glow) 0%,transparent 60%);opacity:0;transition:opacity .3s;}
-  .mode-card:hover{border-color:var(--violet);transform:translateY(-3px);}
-  .mode-card:hover::before{opacity:1;}
-  .mode-icon{font-size:2rem;margin-bottom:14px;display:block;}
-  .mode-name{font-size:1.05rem;font-weight:700;margin-bottom:8px;}
-  .mode-desc{font-size:.85rem;color:var(--muted);line-height:1.5;}
-  .mode-badge{margin-top:16px;display:inline-block;font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;padding:3px 9px;border-radius:3px;}
-  .badge-cyan{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(0,245,212,.25);}
-  .badge-violet{background:var(--violet-glow);color:#bf9fff;border:1px solid rgba(123,47,255,.3);}
-  .badge-score{background:rgba(255,209,102,.12);color:var(--score);border:1px solid rgba(255,209,102,.25);}
-  .badge-danger{background:rgba(255,80,80,.1);color:#ff8080;border:1px solid rgba(255,80,80,.25);}
-  .scoring-section{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;}
-  @media(max-width:700px){.scoring-section{grid-template-columns:1fr;}}
-  .score-table{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
-  .score-row{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);}
-  .score-row:last-child{border-bottom:none;}
-  .score-row:hover{background:var(--lift);}
-  .score-word-len{font-family:'JetBrains Mono',monospace;font-size:.85rem;color:var(--muted);}
-  .score-pts{font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--score);}
-  .score-pts.big{font-size:1.3rem;color:var(--cyan);}
-  .api-flow{display:flex;flex-direction:column;gap:4px;}
-  .api-step{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 18px;display:flex;gap:14px;align-items:flex-start;transition:border-color .2s;}
-  .api-step:hover{border-color:var(--violet);}
-  .api-method{font-family:'JetBrains Mono',monospace;font-size:.65rem;font-weight:600;padding:3px 7px;border-radius:3px;white-space:nowrap;margin-top:1px;}
-  .method-post{background:rgba(123,47,255,.2);color:#bf9fff;}
-  .api-route{font-family:'JetBrains Mono',monospace;font-size:.82rem;color:var(--text);margin-bottom:3px;}
-  .api-note{font-size:.78rem;color:var(--muted);}
-  .arrow{display:flex;justify-content:center;color:var(--border);font-size:.8rem;padding:2px 0;font-family:'JetBrains Mono',monospace;}
-  .stack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
-  .stack-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 18px;display:flex;align-items:center;gap:12px;transition:border-color .2s;}
-  .stack-item:hover{border-color:var(--cyan);}
-  .stack-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-  .dot-violet{background:var(--violet);box-shadow:0 0 8px var(--violet);}
-  .dot-cyan{background:var(--cyan);box-shadow:0 0 8px var(--cyan);}
-  .dot-score{background:var(--score);box-shadow:0 0 8px var(--score);}
-  .dot-muted{background:var(--muted);}
-  .stack-name{font-weight:600;font-size:.88rem;}
-  .stack-sub{font-size:.73rem;color:var(--muted);}
-  .terminal{background:#0D0D17;border:1px solid var(--border);border-radius:10px;overflow:hidden;font-family:'JetBrains Mono',monospace;font-size:.82rem;}
-  .term-bar{background:var(--lift);padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
-  .term-dot{width:10px;height:10px;border-radius:50%;}
-  .term-dot.r{background:#FF5F57;}.term-dot.y{background:#FFBD2E;}.term-dot.g{background:#28CA42;}
-  .term-title{color:var(--muted);font-size:.72rem;margin-left:8px;letter-spacing:.05em;}
-  .term-body{padding:24px 20px;line-height:2;}
-  .term-line{display:flex;gap:10px;}
-  .term-prompt{color:var(--violet);user-select:none;}
-  .term-cmd{color:var(--text);}
-  .term-out{color:var(--cyan);padding-left:18px;}
-  .term-out.dim{color:var(--muted);}
-  .term-cursor{display:inline-block;width:9px;height:1.1em;background:var(--cyan);vertical-align:text-bottom;animation:blink .9s step-end infinite;}
-  @keyframes blink{50%{opacity:0;}}
-  .struct-section{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start;}
-  @media(max-width:700px){.struct-section{grid-template-columns:1fr;}}
-  .struct-tree{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;font-family:'JetBrains Mono',monospace;font-size:.8rem;line-height:2;}
-  .tree-dir{color:var(--cyan);font-weight:600;}
-  .tree-file{color:var(--muted);}
-  .tree-file.hl{color:var(--text);}
-  .tree-indent{padding-left:20px;}
-  .divider{border:none;border-top:1px solid var(--border);margin:0 40px;}
-  footer{padding:40px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
-  .footer-logo{font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--muted);}
-  .footer-logo span{color:var(--cyan);}
-  .footer-links{display:flex;gap:24px;}
-  .footer-links a{color:var(--muted);text-decoration:none;font-size:.8rem;transition:color .2s;}
-  .footer-links a:hover{color:var(--text);}
-  .footer-isc{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--border);letter-spacing:.08em;}
-  .reveal{opacity:0;transform:translateY(24px);transition:opacity .6s ease,transform .6s ease;}
-  .reveal.visible{opacity:1;transform:translateY(0);}
-  @media(max-width:600px){nav{padding:16px 20px;}.nav-links{display:none;}section{padding:70px 20px;}footer{padding:30px 20px;}.divider{margin:0 20px;}}
-  @media(prefers-reduced-motion:reduce){.reveal{transition:none;opacity:1;transform:none;}.term-cursor{animation:none;}}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.6;overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  /* subtle grain */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.04;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  }
+  nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(16px) saturate(140%);
+    background:rgba(7,7,11,.72);border-bottom:1px solid var(--line);
+  }
+  .nav-inner{max-width:var(--max);margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+  .brand{display:flex;align-items:center;gap:10px;font-family:"Space Grotesk",sans-serif;font-weight:700;letter-spacing:-.02em}
+  .brand-mark{
+    width:28px;height:28px;border-radius:8px;background:var(--text);color:var(--bg);
+    display:grid;place-items:center;font-size:11px;font-weight:800;letter-spacing:.06em;
+  }
+  .brand small{font-weight:500;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-size:10px;margin-left:2px}
+  .nav-links{display:flex;gap:18px;align-items:center}
+  .nav-links a{font-size:13px;color:var(--muted);text-decoration:none;transition:color .2s}
+  .nav-links a:hover{color:var(--text)}
+  .nav-cta{
+    font-size:13px;font-weight:600;background:var(--text);color:var(--bg);
+    padding:8px 14px;border-radius:999px;text-decoration:none;
+  }
+  .nav-cta:hover{background:#fff}
+  @media(max-width:760px){.nav-links a:not(.nav-cta){display:none}}
+  /* hero */
+  .hero{
+    position:relative;overflow:hidden;
+    background:
+      radial-gradient(700px 500px at 70% -10%, rgba(139,92,246,.18), transparent 60%),
+      radial-gradient(600px 400px at 10% 20%, rgba(45,212,191,.12), transparent 60%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+    border-bottom:1px solid var(--line);
+  }
+  #tile-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.9}
+  .hero-inner{max-width:var(--max);margin:0 auto;padding:56px 20px 32px;position:relative;z-index:2}
+  .hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:28px;align-items:center}
+  @media(max-width:900px){.hero-grid{grid-template-columns:1fr}}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);background:rgba(255,255,255,.03);
+    padding:6px 10px;border-radius:999px;margin-bottom:16px;
+  }
+  .eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--cyan);display:inline-block;box-shadow:0 0 0 6px rgba(45,212,191,.12)}
+  h1{
+    font-family:"Space Grotesk",sans-serif;
+    font-size:clamp(36px,5.2vw,56px);font-weight:700;letter-spacing:-.04em;line-height:.92;
+    margin-bottom:14px;
+  }
+  h1 em{font-style:normal;position:relative;display:inline-block}
+  h1 em::after{
+    content:"";position:absolute;left:-4px;right:-4px;bottom:4px;height:10px;
+    background:linear-gradient(90deg, rgba(139,92,246,.32), rgba(45,212,191,.28));
+    z-index:-1;border-radius:4px;transform:rotate(-.6deg);
+  }
+  .hero-sub{color:var(--muted);font-size:17px;line-height:1.55;max-width:520px}
+  .hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    height:38px;padding:0 18px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;
+    border:1px solid transparent;cursor:pointer;transition:transform .15s,background .2s,border-color .2s;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{background:var(--text);color:var(--bg)}
+  .btn-primary:hover{background:#fff}
+  .btn-ghost{background:transparent;color:var(--text);border-color:var(--line-2)}
+  .btn-ghost:hover{border-color:var(--muted);background:rgba(255,255,255,.04)}
+  .hero-card{
+    background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+    border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+    box-shadow:0 20px 50px rgba(0,0,0,.35);
+  }
+  .hero-paper{
+    background:var(--paper);color:#2B2416;border-radius:14px;padding:14px 14px 10px;
+    position:relative;overflow:hidden;transform:rotate(.4deg);
+  }
+  .hero-paper::before{
+    content:"";position:absolute;left:36px;top:0;bottom:0;width:1px;background:rgba(220,38,38,.45);
+  }
+  .hero-paper::after{
+    content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(to bottom, transparent 0 23px, rgba(0,0,0,.06) 23px 24px);
+    pointer-events:none;
+  }
+  .paper-head{
+    position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border-bottom:1px dashed rgba(0,0,0,.14);padding-bottom:8px;margin-bottom:8px;
+  }
+  .paper-title{font-family:"Space Grotesk",sans-serif;font-weight:800;letter-spacing:.06em;font-size:12px;color:#7C2D12}
+  .paper-meta{font-family:"JetBrains Mono",monospace;font-size:10px;color:rgba(0,0,0,.45)}
+  .paper-grid{position:relative;z-index:1;display:grid;grid-template-columns:32px 1fr 1fr 1fr;gap:6px;font-family:"JetBrains Mono",monospace;font-size:11px}
+  .paper-th{font-weight:700;color:rgba(0,0,0,.55);padding:6px 4px}
+  .paper-td{background:rgba(255,255,255,.68);border:1px solid rgba(0,0,0,.08);border-radius:8px;padding:8px 6px;min-height:36px}
+  .paper-letter{width:28px;height:28px;border-radius:8px;background:#111;color:var(--paper);display:grid;place-items:center;font-weight:800}
+  .hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .stat{
+    background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center;
+  }
+  .stat-num{font-family:"Space Grotesk",sans-serif;font-size:18px;font-weight:700;letter-spacing:-.02em}
+  .stat-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+  @media(max-width:600px){.hero-stats{grid-template-columns:repeat(2,1fr)}}
+  /* sections */
+  section{padding:56px 20px;border-top:1px solid var(--line)}
+  section.soft{background:var(--bg-2)}
+  .inner{max-width:var(--max);margin:0 auto}
+  .kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--violet);margin-bottom:10px}
+  .kicker.amber{color:var(--amber)}
+  .kicker.cyan{color:var(--cyan)}
+  h2{font-family:"Space Grotesk",sans-serif;font-size:30px;font-weight:700;letter-spacing:-.03em;line-height:1.1;margin-bottom:10px}
+  .sub{color:var(--muted);max-width:640px;font-size:15px;line-height:1.6}
+  .bento{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-top:24px}
+  .bento .card{grid-column:span 3}
+  .bento .card.wide{grid-column:span 6}
+  .bento .card.full{grid-column:span 12}
+  @media(max-width:900px){.bento .card,.bento .card.wide{grid-column:span 6}}
+  @media(max-width:600px){.bento .card,.bento .card.wide,.bento .card.full{grid-column:span 12}}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;position:relative;overflow:hidden;transition:border-color .2s,transform .2s;
+  }
+  .card:hover{border-color:var(--line-2);transform:translateY(-2px)}
+  .card-icon{
+    width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:var(--surface-2);border:1px solid var(--line);font-size:15px;margin-bottom:12px;
+  }
+  .card h3{font-family:"Space Grotesk",sans-serif;font-size:15px;font-weight:700;letter-spacing:-.01em;margin-bottom:6px}
+  .card p{font-size:13px;line-height:1.55;color:var(--muted)}
+  .pill{
+    display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;
+    font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--muted);margin-top:12px;
+  }
+  .pill.violet{background:var(--violet-soft);border-color:rgba(139,92,246,.24);color:#C4B5FD}
+  .pill.cyan{background:var(--cyan-soft);border-color:rgba(45,212,191,.2);color:#99F6E4}
+  .pill.amber{background:var(--amber-soft);border-color:rgba(245,158,11,.2);color:#FCD34D}
+  /* wawasan feature */
+  .wawasan{
+    display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:stretch;margin-top:24px;
+  }
+  @media(max-width:900px){.wawasan{grid-template-columns:1fr}}
+  .wawasan-copy{
+    background:linear-gradient(180deg, #1A150A 0%, #1F180E 100%);
+    border:1px solid rgba(245,158,11,.18);border-radius:var(--radius);padding:20px;
+    position:relative;overflow:hidden;
+  }
+  .wawasan-copy::before{
+    content:"";position:absolute;inset:-40% -20% auto -20%;height:220px;
+    background:radial-gradient(400px 180px at 30% 0%, rgba(245,158,11,.18), transparent 70%);
+    pointer-events:none;
+  }
+  .wawasan-copy h3{font-family:"Space Grotesk",sans-serif;font-size:18px;font-weight:750;letter-spacing:-.02em}
+  .wawasan-copy h3 span{color:var(--amber)}
+  .wawasan-list{margin-top:12px;display:grid;gap:8px}
+  .wawasan-item{
+    display:flex;gap:10px;align-items:flex-start;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:10px 12px;
+    font-size:13px;line-height:1.5;color:#E7E0C6;
+  }
+  .wawasan-item i{width:22px;height:22px;border-radius:7px;background:rgba(245,158,11,.16);display:grid;place-items:center;font-style:normal;font-size:11px;flex-shrink:0}
+  .wawasan-paper{
+    background:var(--paper);color:#1F1A0E;border-radius:var(--radius);padding:16px;position:relative;overflow:hidden;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);
+  }
+  .wawasan-paper::before{content:"";position:absolute;left:34px;top:0;bottom:0;width:1px;background:rgba(180,20,20,.5)}
+  .w-paper-head{position:relative;z-index:1;display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px dashed rgba(0,0,0,.18);padding-bottom:10px;margin-bottom:10px}
+  .w-paper-title{font-family:"Space Grotesk",sans-serif;font-weight:800;letter-spacing:.08em;color:#7C2D12;font-size:11px}
+  .w-grid{position:relative;z-index:1;display:grid;grid-template-columns:34px repeat(3,1fr) 54px;gap:6px;font-family:"JetBrains Mono",monospace;font-size:11px}
+  .w-th{font-weight:800;color:rgba(0,0,0,.5);padding:6px 2px}
+  .w-td{background:rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.08);border-radius:8px;padding:7px 6px;min-height:32px}
+  .w-letter{width:30px;height:30px;border-radius:8px;background:#111;color:var(--paper);display:grid;place-items:center;font-weight:900}
+  .w-foot{position:relative;z-index:1;margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .w-foot span{font-family:"JetBrains Mono",monospace;font-size:10px;background:rgba(0,0,0,.05);border:1px solid rgba(0,0,0,.08);padding:5px 8px;border-radius:999px}
+  /* how to play – hand drawn */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:22px}
+  @media(max-width:860px){.steps{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:520px){.steps{grid-template-columns:1fr}}
+  .step{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;
+    position:relative;
+  }
+  .step-num{
+    font-family:"Space Grotesk",sans-serif;font-weight:800;font-size:12px;letter-spacing:.08em;
+    color:var(--text);background:var(--surface-2);border:1px solid var(--line);width:28px;height:28px;border-radius:999px;display:grid;place-items:center;margin-bottom:10px;
+  }
+  .step h3{font-size:14px;font-weight:700;margin-bottom:6px}
+  .step p{font-size:13px;color:var(--muted);line-height:1.5}
+  /* terminal – dark, chill */
+  .terminal{
+    background:#0B0B0F;border:1px solid var(--line);border-radius:16px;overflow:hidden;
+    box-shadow:0 16px 40px rgba(0,0,0,.35);
+    font-family:"JetBrains Mono",monospace;font-size:12px;line-height:1.75;
+  }
+  .term-bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+  .dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.12)}
+  .dot.r{background:#FF5F57}.dot.y{background:#FFBD2E}.dot.g{background:#28CA42}
+  .term-title{margin-left:8px;font-size:11px;color:var(--muted)}
+  .term-body{padding:16px}
+  .term-line{display:flex;gap:8px;flex-wrap:wrap}
+  .term-prompt{color:var(--muted-2)}
+  .term-cmd{color:var(--text);font-weight:600}
+  .term-out{color:var(--cyan);padding-left:16px;word-break:break-all}
+  .term-out.dim{color:var(--muted)}
+  .term-cursor{display:inline-block;width:7px;height:14px;background:var(--text);vertical-align:middle;animation:blink 1s step-end infinite}
+  @keyframes blink{50%{opacity:0}}
+  /* split */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px}
+  @media(max-width:860px){.split{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  .panel-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .panel-title{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .score-row{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-top:1px solid var(--line)}
+  .score-row:first-of-type{border-top:none}
+  .score-len{font-size:13px;color:var(--muted)}
+  .score-pts{font-weight:700;font-family:"JetBrains Mono",monospace}
+  .api-list{display:flex;flex-direction:column}
+  .api-item{display:flex;gap:12px;padding:14px 16px;border-top:1px solid var(--line)}
+  .api-item:first-child{border-top:none}
+  .api-method{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:800;letter-spacing:.06em;padding:4px 6px;border-radius:7px;height:fit-content;line-height:1;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+  .api-method.post{background:var(--text);color:var(--bg);border-color:var(--text)}
+  .api-route{font-weight:700;font-size:13px}
+  .api-note{font-size:12px;color:var(--muted);margin-top:2px}
+  /* stack */
+  .stack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:20px}
+  .stack-item{display:flex;gap:12px;align-items:center;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+  .stack-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .stack-name{font-size:13px;font-weight:650}
+  .stack-sub{font-size:11px;color:var(--muted)}
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
+  .reveal.visible{opacity:1;transform:translateY(0)}
+  @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}.term-cursor{animation:none}}
+  footer{border-top:1px solid var(--line);padding:18px 20px}
+  .footer-inner{max-width:var(--max);margin:0 auto;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
+  .footer-brand{font-family:"Space Grotesk",sans-serif;font-weight:700}
+  .footer-links{display:flex;gap:16px}
+  .footer-links a{font-size:12px;color:var(--muted);text-decoration:none}
+  .footer-links a:hover{color:var(--text)}
+  .footer-meta{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--muted-2)}
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-logo">Letter<span>Forge</span></div>
-  <div class="nav-links">
-    <a href="#modes">Modes</a>
-    <a href="#how-to-play">How to Play</a>
-    <a href="#features">Features</a>
-    <a href="#stack">Stack</a>
-    <a href="#start">Quick Start</a>
+  <div class="nav-inner">
+    <div class="brand"><span class="brand-mark">LF</span> LetterForge</div>
+    <div class="nav-links">
+      <a href="#modes">Modes</a>
+      <a href="#wawasan">Wawasan 2020</a>
+      <a href="#how-to-play">How to play</a>
+      <a href="#stack">Stack</a>
+      <a href="#start">Quick start</a>
+      <a class="nav-cta" href="#start">Play now</a>
+    </div>
   </div>
 </nav>
 
 <div class="hero">
-  <div class="hero-glow"></div>
-  <canvas id="tile-canvas"></canvas>
-  <div class="hero-content">
-    <div class="hero-eyebrow">Monorepo · Express 5 · Next.js 15</div>
-    <h1>Forge<br>your <em>words.</em></h1>
-    <p class="hero-sub">A full-stack word game platform with multiple game modes, real-time scoring, and leaderboards. Built to play.</p>
-    <div class="hero-actions">
-      <a href="#start" class="btn btn-primary">Quick Start ↓</a>
-      <a href="#modes" class="btn btn-ghost">Explore Modes</a>
-    </div>
-    <div class="hero-score">
-      <div class="score-item"><span class="score-num" data-target="4">0</span><span class="score-label">Game Modes</span></div>
-      <div class="score-item"><span class="score-num" data-target="45305">0</span><span class="score-label">Dictionary Words</span></div>
-      <div class="score-item"><span class="score-num" data-target="20">0</span><span class="score-label">Max Score / Word</span></div>
-      <div class="score-item"><span class="score-num" data-target="147">0</span><span class="score-label">Achievements</span></div>
+  <canvas id="tile-canvas" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow"><i></i> Express 5 · Next.js 15</div>
+        <h1>Forge your<br><em>words.</em></h1>
+        <p class="hero-sub">A chill, competitive word forge. Solo or 1-v-1 duels — plus the Malaysian classic <b style="color:var(--text)">Wawasan 2020</b> on real A4 paper. No fluff, just letters.</p>
+        <div class="hero-actions">
+          <a href="#start" class="btn btn-primary">Start in 3 steps →</a>
+          <a href="#wawasan" class="btn btn-ghost">See Wawasan 2020</a>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+          <span class="pill violet">Duel-only Wawasan</span>
+          <span class="pill cyan">Bilingual columns</span>
+          <span class="pill">No time limit</span>
+        </div>
+      </div>
+
+      <div class="hero-card">
+        <div class="hero-paper">
+          <div class="paper-head">
+            <div class="paper-title">WAWASAN 2020 ✏️</div>
+            <div class="paper-meta">3 lajur × 33 markah · 100 markah</div>
+          </div>
+          <div class="paper-grid">
+            <div class="paper-th"></div><div class="paper-th">🍛 Makanan</div><div class="paper-th">🥤 Minuman</div><div class="paper-th">🌏 Negara</div>
+            <div class="paper-td" style="display:grid;place-items:center"><span class="paper-letter">M</span></div>
+            <div class="paper-td">mee</div><div class="paper-td">milo</div><div class="paper-td">malaysia</div>
+            <div class="paper-td" style="display:grid;place-items:center"><span class="paper-letter" style="background:var(--amber);color:#111">R</span></div>
+            <div class="paper-td">roti</div><div class="paper-td" style="background:#FFF3C4">— langkau</div><div class="paper-td">romania</div>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;position:relative;z-index:1">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(0,0,0,.06);padding:5px 8px;border-radius:999px">A–Z shuffled</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(0,0,0,.06);padding:5px 8px;border-radius:999px">100 pts split · whole numbers</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:10px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.2);padding:5px 8px;border-radius:999px">Owner picks 3–10 cols</span>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="stat"><div class="stat-num" data-target="7">0</div><div class="stat-label">Modes</div></div>
+          <div class="stat"><div class="stat-num" data-target="45305">0</div><div class="stat-label">Words</div></div>
+          <div class="stat"><div class="stat-num" data-target="20">0</div><div class="stat-label">Max / word</div></div>
+          <div class="stat"><div class="stat-num" data-target="147">0</div><div class="stat-label">Achievements</div></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<hr class="divider">
-
 <section id="modes">
-  <p class="section-label reveal">Game Modes</p>
-  <h2 class="reveal">Four ways to play.</h2>
-  <p class="section-sub reveal">Each mode changes the pressure. Same letters, different rules.</p>
-  <div class="modes-grid">
-    <div class="mode-card reveal"><span class="mode-icon">🧘</span><div class="mode-name">Normal</div><div class="mode-desc">Untimed. 10 rounds, 3 letters. Pure vocabulary — find every word hiding in your hand.</div><span class="mode-badge badge-cyan">10 Rounds</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">⏱</span><div class="mode-name">Time Attack</div><div class="mode-desc">60-second TTL, 3 letters. Race the clock — bank points before time runs out.</div><span class="mode-badge badge-violet">60s TTL</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">❤️</span><div class="mode-name">Survival</div><div class="mode-desc">5 lives, 4 letters. Bad words cost a life. Zero lives, game over.</div><span class="mode-badge badge-danger">5 Lives</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">⛓️</span><div class="mode-name">Chain</div><div class="mode-desc">10 rounds, 2 letters. Each word must start with the previous word's last letter.</div><span class="mode-badge badge-score">Letter-Link</span></div>
-  </div>
-</section>
+  <div class="inner">
+    <div class="kicker">Game modes</div>
+    <h2>Pick your pressure.</h2>
+    <p class="sub">Same forge, different rules. Solo is yours. Wawasan lives only in duels.</p>
 
-<hr class="divider">
+    <div class="bento">
+      <!-- featured wawasan -->
+      <div class="card full" style="background:linear-gradient(180deg, rgba(245,158,11,.10), rgba(255,255,255,.02));border-color:rgba(245,158,11,.22)">
+        <div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap">
+          <div>
+            <div style="display:inline-flex;gap:8px;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)">🇲🇾 Duel only · New</div>
+            <h3 style="font-size:20px;margin-top:6px">Wawasan 2020 — the paper classic</h3>
+            <p style="max-width:640px">A–Z in random order, one letter per row. Owner sets <b>3–10</b> columns — <i>Food / Makanan, Drinks, Negara, Haiwan</i> — bilingual or anything you want. Fill each column, <b>Skip</b> to langkau, <b>Hantar</b> then <b>review together</b>: see both sheets, <b>omit</b> invalid answers per column (independent), <b>Sahkan</b> to lock. No timer. Owner can <b>stop anytime</b> (open row discarded).</p>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.2);padding:6px 10px;border-radius:999px;white-space:nowrap">A4 paper · classic emoji</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+          <span class="pill amber">Independent scoring — skip doesn’t punish opponent</span>
+          <span class="pill">Empty or same word = 0 · Different = full column points</span>
+          <span class="pill">Multi-word allowed — “teh o ais”, “ais kosong”</span>
+        </div>
+      </div>
 
-<section id="how-to-play">
-  <p class="section-label reveal">How to Play</p>
-  <h2 class="reveal">A round in four steps.</h2>
-  <p class="section-sub reveal">The same loop runs in every mode. The rules decide when it ends.</p>
-  <div class="modes-grid">
-    <div class="mode-card reveal"><span class="mode-icon">🎲</span><div class="mode-name">Get Letters</div><div class="mode-desc">The server hands you a fresh set — 2, 3, or 4 letters depending on the mode.</div></div>
-    <div class="mode-card reveal"><span class="mode-icon">✍️</span><div class="mode-name">Form a Word</div><div class="mode-desc">Type a valid dictionary word using only the letters in your hand. Repeats are allowed.</div></div>
-    <div class="mode-card reveal"><span class="mode-icon">⚡</span><div class="mode-name">Get Scored</div><div class="mode-desc">New words earn 10–20 points by length. Duplicates still bank 5 points each.</div></div>
-    <div class="mode-card reveal"><span class="mode-icon">🔁</span><div class="mode-name">Next Round</div><div class="mode-desc">New letters arrive. Repeat until you hit the win or lose condition for the mode.</div></div>
-  </div>
-</section>
-
-<hr class="divider">
-
-<section id="sample-round">
-  <p class="section-label reveal">Sample Round</p>
-  <h2 class="reveal">One game, end to end.</h2>
-  <p class="section-sub reveal">A normal_mode session over the API — create, play, finish, rank.</p>
-  <div class="terminal reveal">
-    <div class="term-bar"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span><span class="term-title">normal_mode · round 1</span></div>
-    <div class="term-body">
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games</span> <span style="color:var(--muted)">{"mode":"normal_mode"}</span></div>
-      <div class="term-line term-out">{"gameId":"abc123","letters":["t","e","s","t"],"round":1,"score":0,"maxRounds":10}</div>
-      <div style="height:8px"></div>
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/submit</span> <span style="color:var(--muted)">{"word":"test"}</span></div>
-      <div class="term-line term-out">{"valid":true,"points":10,"score":10,"letters":["o","p","s","t"]}</div>
-      <div style="height:8px"></div>
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/submit</span> <span style="color:var(--muted)">{"word":"post"}</span></div>
-      <div class="term-line term-out">{"valid":true,"points":10,"score":20,"letters":["a","r","e","s"]}</div>
-      <div style="height:8px"></div>
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/complete</span></div>
-      <div class="term-line term-out">{"isCompleted":true,"finalScore":20,"rounds":2}</div>
-      <div style="height:8px"></div>
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/leaderboard</span> <span style="color:var(--muted)">{"period":"all_time"}</span></div>
-      <div class="term-line term-out">{"message":"Score submitted to leaderboard"}</div>
-      <div style="height:8px"></div>
-      <div class="term-line"><span class="term-prompt">$</span><span class="term-cursor"></span></div>
+      <div class="card"><div class="card-icon">○</div><h3>Normal</h3><p>Untimed. 10 rounds, 3 letters. Pure vocab.</p><span class="pill">10 rounds</span></div>
+      <div class="card"><div class="card-icon">◷</div><h3>Time Attack</h3><p>60s TTL, 3 letters. Bank points before it’s gone.</p><span class="pill cyan">60s</span></div>
+      <div class="card"><div class="card-icon">♡</div><h3>Survival</h3><p>5 lives, 4 letters. Bad words cost a life.</p><span class="pill">5 lives</span></div>
+      <div class="card"><div class="card-icon">∞</div><h3>Chain</h3><p>10 rounds, 2 letters. Link last letter → first letter.</p><span class="pill">Letter-link</span></div>
+      <div class="card"><div class="card-icon">◎</div><h3>Fade</h3><p>10 rounds, 3 letters. Memorize in 3s — then they vanish.</p><span class="pill violet">3s fade</span></div>
+      <div class="card"><div class="card-icon">☀</div><h3>Daily Challenge</h3><p>5 attempts. Guess the word from its meanings. Multiple meanings? <b>Next</b> to cycle.</p><span class="pill">5 tries</span></div>
+      <div class="card wide" style="background:var(--surface-2)"><div class="card-icon">⚔</div><h3>Duels</h3><p>1-v-1 on the same letters. Invite by code, pick a mode together, play live via WebSocket.</p><span class="pill violet">Realtime</span></div>
+      <div class="card"><div class="card-icon">▦</div><h3>Practice</h3><p>Same engine, no ranking. Just forge.</p><span class="pill">Free play</span></div>
     </div>
   </div>
 </section>
 
-<hr class="divider">
+<section id="wawasan" class="soft">
+  <div class="inner">
+    <div class="kicker amber">Wawasan 2020 — classic, Malaysian</div>
+    <h2>Old-school paper. New-school duels.</h2>
+    <p class="sub">Warm A4 vibes, blue rules, red margin. The whole game is a sheet you both write on — then argue about.</p>
 
-<section id="scoring">
-  <p class="section-label reveal">Scoring & API</p>
-  <h2 class="reveal">Words earn points.<br>Points earn rank.</h2>
-  <p class="section-sub reveal">Longer words score higher. Duplicates still count — just less.</p>
-  <div class="scoring-section">
-    <div class="reveal">
-      <div class="score-table">
-        <div class="score-row"><div><div class="score-word-len">2–5 letters</div></div><div class="score-pts">+10 pts</div></div>
-        <div class="score-row"><div><div class="score-word-len">6–10 letters</div></div><div class="score-pts">+15 pts</div></div>
-        <div class="score-row"><div><div class="score-word-len">11+ letters</div></div><div class="score-pts big">+20 pts</div></div>
-        <div class="score-row"><div><div class="score-word-len">Duplicate word</div></div><div class="score-pts" style="color:var(--muted)">+5 pts</div></div>
+    <div class="wawasan">
+      <div class="wawasan-copy">
+        <h3>How the sheet works <span>📝</span></h3>
+        <p style="color:var(--muted);font-size:13px;margin-top:6px">Owner customizes the columns before start. Everyone else just plays.</p>
+        <div class="wawasan-list">
+          <div class="wawasan-item"><i>1</i><span><b>Owner sets 3–10 columns</b> — Food, Negara, Haiwan, anything. Bilingual presets or free text.</span></div>
+          <div class="wawasan-item"><i>2</i><span><b>A–Z shuffled</b> — 26 rows, one letter per row, shared order for both players.</span></div>
+          <div class="wawasan-item"><i>3</i><span><b>Fill or Skip</b> — type any valid start (“teh o ais”) or just skip it.</span></div>
+          <div class="wawasan-item"><i>4</i><span><b>Review together</b> — both sheets revealed. Per column, mark as invalid (omit) → opponent gets 0 for that column only. Toggle back to valid if you change your mind. Then you both validate it.</span></div>
+          <div class="wawasan-item"><i>5</i><span><b>100 pts split</b> — whole numbers only (e.g. 3 cols → 33 each). Empty/same = 0. Skipping is independent — your skip doesn’t erase opponent’s score.</span></div>
+          <div class="wawasan-item"><i>6</i><span><b>Owner can stop anytime</b> — open/review row discarded, only <b>done</b> rows count.</span></div>
+        </div>
+      </div>
+
+      <div class="wawasan-paper">
+        <div class="w-paper-head">
+          <div class="w-paper-title">WAWASAN 2020 ✏️📏</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(0,0,0,.45)">26 huruf · Kod: FORGE</div>
+        </div>
+        <div class="w-grid">
+          <div class="w-th"></div><div class="w-th">🍛 Makanan</div><div class="w-th">🥤 Minuman</div><div class="w-th">🌏 Negara</div><div class="w-th">✓</div>
+          <div class="w-td" style="display:grid;place-items:center"><span class="w-letter">M</span></div><div class="w-td">mee</div><div class="w-td">milo</div><div class="w-td">malaysia</div><div class="w-td" style="display:grid;place-items:center">✓ 33</div>
+          <div class="w-td" style="display:grid;place-items:center"><span class="w-letter">R</span></div><div class="w-td">roti</div><div class="w-td" style="background:#FFF0B3">—</div><div class="w-td">romania</div><div class="w-td" style="display:grid;place-items:center">— 33</div>
+          <div class="w-td" style="display:grid;place-items:center"><span class="w-letter" style="background:#111;color:var(--paper)">T</span></div><div class="w-td" style="border-style:dashed">teh o ais</div><div class="w-td">teh o</div><div class="w-td" style="background:#FFE4E6">thailand*</div><div class="w-td" style="display:grid;place-items:center">✗</div>
+        </div>
+        <div class="w-foot">
+          <span>✓ different = full column pts</span><span>= same = 0</span><span>– skip = 0 (you only)</span><span>✗ omitted = 0</span>
+        </div>
+        <p style="position:relative;z-index:1;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(0,0,0,.5)">* opponent marked “thailand” as invalid → opponent 0, you still score if yours is valid.</p>
       </div>
     </div>
-    <div class="api-flow reveal">
-      <div class="api-step"><span class="api-method method-post">POST</span><div><div class="api-route">/games</div><div class="api-note">Returns gameId, random letters, expiresAt</div></div></div>
-      <div class="arrow">│</div>
-      <div class="api-step"><span class="api-method method-post">POST</span><div><div class="api-route">/games/:id/submit</div><div class="api-note">Validates word, scores it, returns new letters</div></div></div>
-      <div class="arrow">│</div>
-      <div class="api-step"><span class="api-method method-post">POST</span><div><div class="api-route">/games/:id/reset</div><div class="api-note">Rerolls letters, clears used words</div></div></div>
-      <div class="arrow">│</div>
-      <div class="api-step"><span class="api-method method-post">POST</span><div><div class="api-route">/games/:id/complete</div><div class="api-note">Finalizes the game session</div></div></div>
-      <div class="arrow">│</div>
-      <div class="api-step"><span class="api-method method-post">POST</span><div><div class="api-route">/games/:id/leaderboard</div><div class="api-note">Submits final score to rankings</div></div></div>
+  </div>
+</section>
+
+<section id="how-to-play">
+  <div class="inner">
+    <div class="kicker">How to play</div>
+    <h2>A round in four steps.</h2>
+    <p class="sub">Same loop, every mode. The rules decide when it ends.</p>
+    <div class="steps">
+      <div class="step reveal"><div class="step-num">01</div><h3>Get letters</h3><p>Server deals 2–4 letters. In duels, both get the same set.</p></div>
+      <div class="step reveal"><div class="step-num">02</div><h3>Form a word</h3><p>Valid dictionary word only. Repeats allowed. Multi-word answers work in Wawasan.</p></div>
+      <div class="step reveal"><div class="step-num">03</div><h3>Get scored</h3><p>10–20 pts by length. Duplicate 5. In Wawasan, independent per column.</p></div>
+      <div class="step reveal"><div class="step-num">04</div><h3>Next round</h3><p>New letters. Repeat until win/lose, or in Wawasan — next alphabet letter.</p></div>
     </div>
   </div>
 </section>
 
-<hr class="divider">
-
-<section id="features">
-  <p class="section-label reveal">Features</p>
-  <h2 class="reveal">More than a word list.</h2>
-  <p class="section-sub reveal">Progression, competition, and replayability — all baked in.</p>
-  <div class="modes-grid">
-    <div class="mode-card reveal"><span class="mode-icon">🏆</span><div class="mode-name">Leaderboards</div><div class="mode-desc">Rank against other players across 3 periods — daily, weekly, and all-time — for every game mode.</div><span class="mode-badge badge-cyan">3 Periods</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">🎖️</span><div class="mode-name">Milestones</div><div class="mode-desc">147 achievements across 4 rarities — from <em>First Forge</em> to <em>Legendary Survivor</em>. Unlock them by playing.</div><span class="mode-badge badge-violet">147 Achievements</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">📖</span><div class="mode-name">Dictionary</div><div class="mode-desc">Every submission validated against 45,305 English words. No hand-waved guesses.</div><span class="mode-badge badge-score">45,305 Words</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">⚡</span><div class="mode-name">Real-time Scoring</div><div class="mode-desc">Points, lives, round, and letter update on every submission. No page reloads.</div><span class="mode-badge badge-cyan">Live Updates</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">🎯</span><div class="mode-name">Game History</div><div class="mode-desc">Every submission is persisted with the word, points, and timestamps — a full audit trail of every game.</div><span class="mode-badge badge-violet">Audit Trail</span></div>
-    <div class="mode-card reveal"><span class="mode-icon">🔄</span><div class="mode-name">Mode-aware Logic</div><div class="mode-desc">Different rules per mode — TTL, lives, letter-linking — all enforced server-side for fair play.</div><span class="mode-badge badge-score">4 Rule Sets</span></div>
-  </div>
-</section>
-
-<hr class="divider">
-
-<section id="stack">
-  <p class="section-label reveal">Technology</p>
-  <h2 class="reveal">Built on proven tools.</h2>
-  <p class="section-sub reveal">A TypeScript monorepo with a Node.js backend and a Next.js frontend, sharing workspace packages.</p>
-  <div class="stack-grid">
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">Node.js 24</div><div class="stack-sub">Runtime</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-violet"></span><div><div class="stack-name">Express 5</div><div class="stack-sub">Backend API · CommonJS</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">Next.js 15</div><div class="stack-sub">Frontend · App Router</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">React 19</div><div class="stack-sub">UI Layer · TypeScript</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-score"></span><div><div class="stack-name">MongoDB 7</div><div class="stack-sub">Database · Native driver</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-muted"></span><div><div class="stack-name">TailwindCSS</div><div class="stack-sub">Styling · Radix UI / shadcn</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-violet"></span><div><div class="stack-name">npm Workspaces</div><div class="stack-sub">Monorepo</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-muted"></span><div><div class="stack-name">Docker Compose</div><div class="stack-sub">Containers</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-score"></span><div><div class="stack-name">Mocha + Chai</div><div class="stack-sub">Testing · Sinon stubs</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">Swagger</div><div class="stack-sub">OpenAPI · Auto-gen</div></div></div>
-  </div>
-</section>
-
-<hr class="divider">
-
-<section id="quality">
-  <p class="section-label reveal">Engineering</p>
-  <h2 class="reveal">Built to last.</h2>
-  <p class="section-sub reveal">Validated, tested, and deployable — quality is a feature, not an afterthought.</p>
-  <div class="stack-grid">
-    <div class="stack-item reveal"><span class="stack-dot dot-score"></span><div><div class="stack-name">53 Tests Passing</div><div class="stack-sub">Mocha · Chai · Sinon stubs</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-violet"></span><div><div class="stack-name">Structured Errors</div><div class="stack-sub">Consistent JSON · request IDs</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">TypeScript Frontend</div><div class="stack-sub">Strict types · tsc --noEmit</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-cyan"></span><div><div class="stack-name">Auto-generated Docs</div><div class="stack-sub">swagger-autogen · live /api-docs</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-violet"></span><div><div class="stack-name">Docker Ready</div><div class="stack-sub">Dockerfile + docker-compose</div></div></div>
-    <div class="stack-item reveal"><span class="stack-dot dot-score"></span><div><div class="stack-name">Request Tracing</div><div class="stack-sub">Per-request X-Request-Id</div></div></div>
-  </div>
-</section>
-
-<hr class="divider">
-
-<section id="start">
-  <p class="section-label reveal">Quick Start</p>
-  <h2 class="reveal">Up in three steps.</h2>
-  <p class="section-sub reveal">Clone, install, run. The <code style="font-family:'JetBrains Mono';color:var(--cyan);font-size:.85em;">run-local.sh</code> script handles the rest.</p>
-  <div class="struct-section">
+<section id="sample-round" class="soft">
+  <div class="inner">
+    <div class="kicker cyan">Sample round</div>
+    <h2>One game, end to end.</h2>
+    <p class="sub">Normal mode over the API — create, play, finish, rank.</p>
     <div class="terminal reveal">
-      <div class="term-bar"><span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span><span class="term-title">bash — letterforge-app</span></div>
+      <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">normal_mode · round 1</span></div>
       <div class="term-body">
-        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">npm install</span></div>
-        <div class="term-line term-out dim">installing workspace dependencies...</div>
-        <div style="height:8px"></div>
-        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">cp packages/server/.env.example packages/server/.env</span></div>
-        <div style="height:8px"></div>
-        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">./run-local.sh start</span></div>
-        <div class="term-line term-out">▶  server   → http://localhost:8888</div>
-        <div class="term-line term-out">▶  dashboard → http://localhost:9002</div>
-        <div class="term-line term-out">▶  api-docs  → /letter-forge/v1/api-docs</div>
-        <div style="height:8px"></div>
+        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games</span> <span class="term-out dim">{"mode":"normal_mode"}</span></div>
+        <div class="term-line term-out">{"gameId":"abc123","letters":["t","e","s","t"],"round":1,"score":0,"maxRounds":10}</div>
+        <div style="height:6px"></div>
+        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/submit</span> <span class="term-out dim">{"word":"test"}</span></div>
+        <div class="term-line term-out">{"valid":true,"points":10,"score":10,"letters":["o","p","s","t"]}</div>
+        <div style="height:6px"></div>
+        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/submit</span> <span class="term-out dim">{"word":"post"}</span></div>
+        <div class="term-line term-out">{"valid":true,"points":10,"score":20,"letters":["a","r","e","s"]}</div>
+        <div style="height:6px"></div>
+        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/complete</span></div>
+        <div class="term-line term-out">{"isCompleted":true,"finalScore":20,"rounds":2}</div>
+        <div style="height:6px"></div>
+        <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">POST /games/abc123/leaderboard</span> <span class="term-out dim">{"period":"all_time"}</span></div>
+        <div class="term-line term-out">{"message":"Score submitted to leaderboard"}</div>
+        <div style="height:6px"></div>
         <div class="term-line"><span class="term-prompt">$</span><span class="term-cursor"></span></div>
       </div>
     </div>
-    <div class="reveal">
-      <div class="struct-tree">
-        <div class="tree-dir">letterforge-app/</div>
-        <div class="tree-indent">
-          <div class="tree-dir">packages/</div>
-          <div class="tree-indent">
-            <div class="tree-dir">server/</div>
-            <div class="tree-indent"><div class="tree-file hl">.env.example</div><div class="tree-file">index.js</div></div>
-            <div class="tree-dir">dashboard/</div>
-            <div class="tree-indent"><div class="tree-file hl">.env.example</div><div class="tree-file">next.config.ts</div></div>
-          </div>
-          <div class="tree-dir">lib/</div>
-          <div class="tree-indent"><div class="tree-file" style="color:var(--border)">← shared packages</div></div>
-          <div class="tree-file hl">run-local.sh</div>
-          <div class="tree-file">docker-compose.yaml</div>
-          <div class="tree-file">Dockerfile</div>
-          <div class="tree-file">tsconfig.base.json</div>
-        </div>
+  </div>
+</section>
+
+<section id="scoring">
+  <div class="inner">
+    <div class="kicker">Scoring &amp; API</div>
+    <h2>Words earn points. Points earn rank.</h2>
+    <p class="sub">Longer = more. Duplicates still count — just less.</p>
+    <div class="split">
+      <div class="panel reveal">
+        <div class="panel-head"><span class="panel-title">Points per word</span></div>
+        <div class="score-row"><span class="score-len">2–5 letters</span><span class="score-pts">+10</span></div>
+        <div class="score-row"><span class="score-len">6–10 letters</span><span class="score-pts">+15</span></div>
+        <div class="score-row"><span class="score-len">11+ letters</span><span class="score-pts" style="color:var(--amber)">+20</span></div>
+        <div class="score-row"><span class="score-len">Duplicate</span><span class="score-pts" style="color:var(--muted)">+5</span></div>
+        <div class="score-row"><span class="score-len">Wawasan per column</span><span class="score-pts">100 ÷ cols (rounded, whole)</span></div>
       </div>
-      <div style="margin-top:16px;padding:16px 18px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:.82rem;color:var(--muted);">
-        <span style="color:var(--violet);font-family:'JetBrains Mono';font-size:.7rem;font-weight:600;letter-spacing:.1em;">ENV VARS</span><br><br>
-        Backend reads from <code style="color:var(--text)">packages/server/.env</code><br>
-        Frontend reads from <code style="color:var(--text)">packages/dashboard/.env.local</code><br><br>
-        <span style="color:var(--border)">Never commit .env files.</span>
+      <div class="panel reveal">
+        <div class="panel-head"><span class="panel-title">Lifecycle</span></div>
+        <div class="api-list">
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/games</div><div class="api-note">Returns gameId, letters, expiresAt</div></div></div>
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/games/:id/submit</div><div class="api-note">Scores word, returns new letters</div></div></div>
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/duels/:id/wawasan/answer</div><div class="api-note">Submit row answers (skip = empty string)</div></div></div>
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/duels/:id/wawasan/challenge</div><div class="api-note">Toggle per-column omit (independent)</div></div></div>
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/duels/:id/wawasan/confirm</div><div class="api-note">Both confirm → next letter</div></div></div>
+          <div class="api-item"><span class="api-method post">POST</span><div><div class="api-route">/games/:id/leaderboard</div><div class="api-note">Submits final score</div></div></div>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<hr class="divider">
+<section id="features" class="soft">
+  <div class="inner">
+    <div class="kicker">Features</div>
+    <h2>More than a word list.</h2>
+    <p class="sub">Competitive, bilingual, and built to be replayed.</p>
+    <div class="bento">
+      <div class="card"><div class="card-icon">◈</div><h3>Leaderboards</h3><p>Daily / weekly / all-time per mode.</p><span class="pill">3 periods</span></div>
+      <div class="card"><div class="card-icon">✦</div><h3>Milestones</h3><p>147 achievements, 4 rarities — from First Forge to Legendary.</p><span class="pill violet">147</span></div>
+      <div class="card"><div class="card-icon">◎</div><h3>45k Dictionary</h3><p>Every word validated server-side. No hand-waving.</p><span class="pill">45,305</span></div>
+      <div class="card"><div class="card-icon">↗</div><h3>Realtime duels</h3><p>WebSocket live updates, polling fallback.</p><span class="pill cyan">WS + poll</span></div>
+      <div class="card"><div class="card-icon">≡</div><h3>History</h3><p>Full audit — word, points, timestamps.</p><span class="pill">Audit trail</span></div>
+      <div class="card"><div class="card-icon">🌏</div><h3>Bilingual</h3><p>Wawasan presets in EN/MY, or free-text anything.</p><span class="pill amber">EN + MY</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="inner">
+    <div class="kicker">Stack</div>
+    <h2>Proven, not fancy.</h2>
+    <p class="sub">TypeScript monorepo — Node backend, Next frontend, shared workspaces.</p>
+    <div class="stack-grid">
+      <div class="stack-item"><span class="stack-dot" style="background:#339933"></span><div><div class="stack-name">Node.js 24</div><div class="stack-sub">Runtime</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#000"></span><div><div class="stack-name">Express 5</div><div class="stack-sub">CommonJS · API</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#0071E3"></span><div><div class="stack-name">Next.js 15</div><div class="stack-sub">App Router</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#61DAFB"></span><div><div class="stack-name">React 19</div><div class="stack-sub">UI · TypeScript</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#47A248"></span><div><div class="stack-name">MongoDB 7</div><div class="stack-sub">Native driver</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#FF6A00"></span><div><div class="stack-name">RabbitMQ</div><div class="stack-sub">Async scoring</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#38BDF8"></span><div><div class="stack-name">Tailwind/shadcn</div><div class="stack-sub">Styling</div></div></div>
+      <div class="stack-item"><span class="stack-dot" style="background:#CB3837"></span><div><div class="stack-name">npm Workspaces</div><div class="stack-sub">Monorepo</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="start" class="soft">
+  <div class="inner">
+    <div class="kicker cyan">Quick start</div>
+    <h2>Up in three steps.</h2>
+    <p class="sub">Clone, install, run. <code style="font-family:var(--mono);font-size:13px;background:var(--surface);border:1px solid var(--line);padding:2px 6px;border-radius:8px">run-local.sh</code> handles Mongo &amp; RabbitMQ.</p>
+    <div class="split" style="margin-top:20px">
+      <div class="terminal">
+        <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">bash — letterforge-app</span></div>
+        <div class="term-body">
+          <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">npm install</span></div>
+          <div class="term-line term-out dim">installing workspace dependencies…</div>
+          <div style="height:6px"></div>
+          <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">cp packages/server/.env.example packages/server/.env</span></div>
+          <div style="height:6px"></div>
+          <div class="term-line"><span class="term-prompt">$</span><span class="term-cmd">./run-local.sh start</span></div>
+          <div class="term-line term-out">▶ server → http://localhost:8888</div>
+          <div class="term-line term-out">▶ dashboard → http://localhost:9002</div>
+          <div class="term-line term-out">▶ api-docs → /letter-forge/v1/api-docs</div>
+          <div style="height:6px"></div>
+          <div class="term-line"><span class="term-prompt">$</span><span class="term-cursor"></span></div>
+        </div>
+      </div>
+      <div>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:2">
+          <div style="color:var(--text);font-weight:700">letterforge-app/</div>
+          <div style="padding-left:14px;border-left:1px solid var(--line);margin-left:4px">
+            <div>packages/<span style="color:var(--muted)">server</span> <span style="color:var(--amber)">· wawasan 2020</span></div>
+            <div>packages/<span style="color:var(--muted)">dashboard</span> <span style="color:var(--cyan)">· daily meanings → Next</span></div>
+            <div style="color:var(--violet)">run-local.sh</div>
+            <div>docker-compose.yaml</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-size:12px;color:var(--muted);line-height:1.6">
+          <b style="color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em">ENDPOINTS</b><br>
+          API → <code style="color:var(--text)">/letter-forge/v1</code> · Docs → <code style="color:var(--text)">/api-docs</code><br>
+          Network → <code style="color:var(--text)">http://&lt;LAN-IP&gt;:8888 / :9002</code>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <footer>
-  <div class="footer-logo">Letter<span>Forge</span></div>
-  <div class="footer-links"><a href="#modes">Modes</a><a href="#how-to-play">How to Play</a><a href="#features">Features</a><a href="#stack">Stack</a><a href="#start">Start</a></div>
-  <div class="footer-isc">ISC LICENSE</div>
+  <div class="footer-inner">
+    <div class="footer-brand">LetterForge</div>
+    <div class="footer-links"><a href="#modes">Modes</a><a href="#wawasan">Wawasan</a><a href="#stack">Stack</a></div>
+    <div class="footer-meta">ISC · Built for fun, shipped like pro.</div>
+  </div>
 </footer>
 
 <script>
-(function() {
-  const canvas = document.getElementById('tile-canvas');
-  const ctx = canvas.getContext('2d');
-  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  let tiles = [], W, H;
-
-  // FIX: read from hero parent element so canvas matches full hero dimensions
-  function resize() {
-    const hero = canvas.parentElement;
-    W = canvas.width = hero.offsetWidth;
-    H = canvas.height = hero.offsetHeight;
+(function(){
+  const canvas=document.getElementById('tile-canvas');
+  const ctx=canvas.getContext('2d');
+  const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let tiles=[],W,H;
+  function resize(){
+    const hero=canvas.parentElement;
+    W=canvas.width=hero.offsetWidth;
+    H=canvas.height=hero.offsetHeight;
   }
   resize();
-  window.addEventListener('resize', () => { resize(); initTiles(); });
-
-  function makeTile() {
-    const size = 32 + Math.random() * 24;
-    return {
-      x: Math.random() * W, y: -60 - Math.random() * H, size,
-      letter: LETTERS[Math.floor(Math.random() * LETTERS.length)],
-      speed: 0.4 + Math.random() * 0.7, alpha: 0.06 + Math.random() * 0.1,
-      drift: (Math.random() - 0.5) * 0.3, rotation: (Math.random() - 0.5) * 0.3,
-      rotSpeed: (Math.random() - 0.5) * 0.003,
+  window.addEventListener('resize',()=>{resize();initTiles()});
+  function makeTile(){
+    const size=26+Math.random()*18;
+    return{
+      x:Math.random()*W,y:-60-Math.random()*H,size,
+      letter:LETTERS[Math.floor(Math.random()*LETTERS.length)],
+      speed:0.2+Math.random()*0.35,alpha:0.05+Math.random()*0.06,
+      drift:(Math.random()-0.5)*0.18,rotation:(Math.random()-0.5)*0.18,rotSpeed:(Math.random()-0.5)*0.0015
     };
   }
-
-  function initTiles() {
-    tiles = [];
-    const count = Math.floor(W / 80);
-    for (let i = 0; i < count; i++) { const t = makeTile(); t.y = Math.random() * H; tiles.push(t); }
+  function initTiles(){
+    tiles=[];
+    const count=Math.max(7,Math.floor(W/140));
+    for(let i=0;i<count;i++){const t=makeTile();t.y=Math.random()*H;tiles.push(t);}
   }
   initTiles();
-
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-    ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-    ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-    ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();
   }
-
-  function draw() {
-    ctx.clearRect(0, 0, W, H);
-    tiles.forEach(t => {
-      ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.rotation); ctx.globalAlpha = t.alpha;
-      ctx.fillStyle = '#7B2FFF'; ctx.beginPath(); roundRect(ctx, -t.size/2, -t.size/2, t.size, t.size, 5); ctx.fill();
-      ctx.strokeStyle = '#00F5D4'; ctx.lineWidth = 1; ctx.globalAlpha = t.alpha * 0.6; ctx.stroke();
-      ctx.globalAlpha = t.alpha * 2.5; ctx.fillStyle = '#F0EEF8';
-      ctx.font = `600 ${t.size * 0.5}px 'Space Grotesk',sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t.letter, 0, 1);
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    tiles.forEach(t=>{
+      ctx.save();ctx.translate(t.x,t.y);ctx.rotate(t.rotation);ctx.globalAlpha=t.alpha;
+      ctx.fillStyle='#1A1A22';ctx.beginPath();roundRect(ctx,-t.size/2,-t.size/2,t.size,t.size,8);ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.06)';ctx.lineWidth=1;ctx.stroke();
+      ctx.globalAlpha=t.alpha*2.8;ctx.fillStyle='#9A9AA8';
+      ctx.font=`700 ${t.size*0.42}px "Space Grotesk",sans-serif`;
+      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t.letter,0,1);
       ctx.restore();
-      t.y += t.speed; t.x += t.drift; t.rotation += t.rotSpeed;
-      if (t.y > H + 60) Object.assign(t, makeTile());
+      t.y+=t.speed;t.x+=t.drift;t.rotation+=t.rotSpeed;
+      if(t.y>H+60) Object.assign(t,makeTile());
     });
     requestAnimationFrame(draw);
   }
   draw();
 })();
-
-function animateCount(el, target, duration) {
-  const start = performance.now();
-  function tick(now) {
-    const p = Math.min((now - start) / duration, 1);
-    const ease = 1 - Math.pow(1 - p, 3);
-    el.textContent = Math.floor(ease * target);
-    if (p < 1) requestAnimationFrame(tick); else el.textContent = target;
+function animateCount(el,target,duration){
+  const start=performance.now();
+  function tick(now){
+    const p=Math.min((now-start)/duration,1);
+    const ease=1-Math.pow(1-p,3);
+    el.textContent=Math.floor(ease*target).toLocaleString();
+    if(p<1) requestAnimationFrame(tick); else el.textContent=target.toLocaleString();
   }
   requestAnimationFrame(tick);
 }
-
-let scored = false;
-const heroObserver = new IntersectionObserver(entries => {
-  if (entries[0].isIntersecting && !scored) {
-    scored = true;
-    setTimeout(() => {
-      document.querySelectorAll('.score-num[data-target]').forEach(el => animateCount(el, +el.dataset.target, 1400));
-    }, 600);
+let scored=false;
+const heroObserver=new IntersectionObserver(entries=>{
+  if(entries[0].isIntersecting && !scored){
+    scored=true;
+    setTimeout(()=>{document.querySelectorAll('.stat-num[data-target]').forEach(el=>animateCount(el,+el.dataset.target,1200))},400);
   }
-}, { threshold: 0.3 });
-heroObserver.observe(document.querySelector('.hero-score'));
-
-const revealObs = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObs.unobserve(e.target); } });
-}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.reveal').forEach(el => revealObs.observe(el));
+},{threshold:0.3});
+const hs=document.querySelector('.hero-stats');
+if(hs) heroObserver.observe(hs);
+const revealObs=new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');revealObs.unobserve(e.target)}});
+},{threshold:0.12,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.reveal').forEach(el=>revealObs.observe(el));
 </script>
 </body>
 </html>
